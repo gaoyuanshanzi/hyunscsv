@@ -1,15 +1,22 @@
 "use client";
 
 import React from "react";
+import FunctionDropdown from "./FunctionDropdown";
+import { SpreadsheetFunction } from "@/data/functions";
 
 interface ToolbarProps {
   onCommand: (command: string, value?: string) => void;
+  onSelectFunction?: (func: SpreadsheetFunction) => void;
   activeFormats: Set<string>;
 }
 
 const fontSizes = ["10", "11", "12", "14", "16", "18", "20", "24", "28", "32", "36"];
 
-export default function Toolbar({ onCommand, activeFormats }: ToolbarProps) {
+export default function Toolbar({
+  onCommand,
+  onSelectFunction,
+  activeFormats,
+}: ToolbarProps) {
   return (
     <div
       role="toolbar"
@@ -17,7 +24,7 @@ export default function Toolbar({ onCommand, activeFormats }: ToolbarProps) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "2px",
+        gap: "4px",
         padding: "4px 12px",
         background: "var(--color-bg)",
         borderBottom: "1px solid var(--color-border)",
@@ -26,6 +33,14 @@ export default function Toolbar({ onCommand, activeFormats }: ToolbarProps) {
         flexWrap: "nowrap",
       }}
     >
+      {/* Function Catalog Dropdown */}
+      {onSelectFunction && (
+        <>
+          <FunctionDropdown onSelectFunction={onSelectFunction} />
+          <div className="toolbar-divider" />
+        </>
+      )}
+
       {/* Font family */}
       <select
         id="toolbar-font-family"
@@ -288,7 +303,7 @@ export default function Toolbar({ onCommand, activeFormats }: ToolbarProps) {
           whiteSpace: "nowrap",
         }}
       >
-        수식: =SUM, =IF, =VLOOKUP 지원
+        Excel 호환 수식 엔진 내장
       </div>
     </div>
   );
