@@ -73,38 +73,111 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
       },
       getWorkbook: () => workbookInstanceRef.current,
       insertFormula: (template: string) => {
+        const wb = workbookInstanceRef.current;
+        if (!wb) return;
         try {
-          if (workbookInstanceRef.current) {
-            const selection = workbookInstanceRef.current.getSelection();
-            if (selection && selection.length > 0) {
-              const r = selection[0].row[0];
-              const c = selection[0].column[0];
-              if (r !== undefined && c !== undefined) {
-                workbookInstanceRef.current.setCellValue(r, c, template);
-              }
-            }
+          const selection = wb.getSelection();
+          let r = 0;
+          let c = 0;
+          if (selection && selection.length > 0) {
+            r = selection[0].row[0] ?? 0;
+            c = selection[0].column[0] ?? 0;
           }
+          wb.setCellValue(r, c, template);
           navigator.clipboard?.writeText(template);
         } catch (err) {
           console.warn("insertFormula error:", err);
         }
       },
-      applyCommand: (command: string) => {
-        const el = document.querySelector<HTMLElement>(".luckysheet-cell-main");
-        if (!el) return;
-        
-        switch (command) {
-          case "bold":
-            document.execCommand?.("bold");
-            break;
-          case "italic":
-            document.execCommand?.("italic");
-            break;
-          case "underline":
-            document.execCommand?.("underline");
-            break;
-          default:
-            break;
+      applyCommand: (command: string, value?: string) => {
+        const wb = workbookInstanceRef.current;
+        if (!wb) return;
+
+        try {
+          const selection = wb.getSelection();
+          if (!selection || selection.length === 0) return;
+
+          const range = selection[0];
+          const r = range.row[0] ?? 0;
+          const c = range.column[0] ?? 0;
+
+          switch (command) {
+            case "bold": {
+              const cur = wb.getCellValue(r, c, { type: "bl" });
+              const next = cur === 1 ? 0 : 1;
+              wb.setCellFormatByRange("bl", next, range);
+              break;
+            }
+            case "italic": {
+              const cur = wb.getCellValue(r, c, { type: "it" });
+              const next = cur === 1 ? 0 : 1;
+              wb.setCellFormatByRange("it", next, range);
+              break;
+            }
+            case "underline": {
+              const cur = wb.getCellValue(r, c, { type: "un" });
+              const next = cur === 1 ? 0 : 1;
+              wb.setCellFormatByRange("un", next, range);
+              break;
+            }
+            case "fontSize": {
+              if (value) {
+                const fs = parseInt(value, 10) || 12;
+                wb.setCellFormatByRange("fs", fs, range);
+              }
+              break;
+            }
+            case "fontFamily": {
+              if (value) {
+                wb.setCellFormatByRange("ff", value, range);
+              }
+              break;
+            }
+            case "textColor": {
+              if (value) {
+                wb.setCellFormatByRange("fc", value, range);
+              }
+              break;
+            }
+            case "bgColor": {
+              if (value) {
+                wb.setCellFormatByRange("bg", value, range);
+              }
+              break;
+            }
+            case "alignLeft": {
+              wb.setCellFormatByRange("ht", 1, range);
+              break;
+            }
+            case "alignCenter": {
+              wb.setCellFormatByRange("ht", 0, range);
+              break;
+            }
+            case "alignRight": {
+              wb.setCellFormatByRange("ht", 2, range);
+              break;
+            }
+            case "wrap": {
+              const cur = wb.getCellValue(r, c, { type: "tb" });
+              const next = cur === "2" ? "0" : "2";
+              wb.setCellFormatByRange("tb", next, range);
+              break;
+            }
+            case "merge": {
+              try {
+                wb.mergeCells(selection, "merge-all");
+              } catch (_) {
+                try {
+                  wb.cancelMerge(selection);
+                } catch (__) {}
+              }
+              break;
+            }
+            default:
+              break;
+          }
+        } catch (err) {
+          console.warn("applyCommand error:", err);
         }
       },
     };

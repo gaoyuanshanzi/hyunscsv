@@ -55,6 +55,7 @@ export default function Toolbar({
           cursor: "pointer",
           minWidth: "100px",
         }}
+        onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => onCommand("fontFamily", e.target.value)}
         aria-label="폰트 선택"
       >
@@ -82,6 +83,7 @@ export default function Toolbar({
           width: "64px",
         }}
         defaultValue="12"
+        onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => onCommand("fontSize", e.target.value)}
         aria-label="폰트 크기"
       >
@@ -326,6 +328,10 @@ function ToolbarButton({ id, label, active, onClick, children, "aria-label": ari
       id={id}
       type="button"
       className={`btn btn-ghost${active ? " active" : ""}`}
+      onMouseDown={(e) => {
+        // 셀 선택 영역 포커스가 사라지지 않도록 브라우저 포커스 스틸 방지
+        e.preventDefault();
+      }}
       onClick={onClick}
       data-tooltip={label}
       aria-label={ariaLabel}
