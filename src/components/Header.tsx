@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useRef } from "react";
+import FormulaSearchBar from "./FormulaSearchBar";
+import { SpreadsheetFunction } from "@/data/functions";
 
 interface HeaderProps {
   onImport: (file: File) => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
+  onSelectFunction: (func: SpreadsheetFunction) => void;
   isLoading: boolean;
   sheetName: string;
 }
@@ -14,6 +17,7 @@ export default function Header({
   onImport,
   onExportCsv,
   onExportXlsx,
+  onSelectFunction,
   isLoading,
   sheetName,
 }: HeaderProps) {
@@ -23,7 +27,6 @@ export default function Header({
     const file = e.target.files?.[0];
     if (file) {
       onImport(file);
-      // Reset input so same file can be re-selected
       e.target.value = "";
     }
   };
@@ -49,11 +52,10 @@ export default function Header({
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          marginRight: "8px",
+          marginRight: "4px",
           flexShrink: 0,
         }}
       >
-        {/* Logo Icon */}
         <div
           style={{
             width: "28px",
@@ -104,7 +106,7 @@ export default function Header({
             borderRadius: "20px",
             fontSize: "12px",
             color: "var(--color-text-secondary)",
-            maxWidth: "200px",
+            maxWidth: "160px",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -124,6 +126,11 @@ export default function Header({
 
       {/* Loading indicator */}
       {isLoading && <span className="spinner" aria-label="불러오는 중..." />}
+
+      {/* Center: Global Formula / Function Search Bar */}
+      <div style={{ marginLeft: "12px" }}>
+        <FormulaSearchBar onSelectFunction={onSelectFunction} />
+      </div>
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />

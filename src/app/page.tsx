@@ -132,6 +132,7 @@ export default function HomePage() {
         onImport={handleImport}
         onExportCsv={handleExportCsv}
         onExportXlsx={handleExportXlsx}
+        onSelectFunction={handleSelectFunction}
         isLoading={isLoading}
         sheetName={currentSheetName}
       />
