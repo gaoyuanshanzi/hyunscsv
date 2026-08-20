@@ -12,6 +12,7 @@ import { DEFAULT_SHEETS } from "@/components/SpreadsheetWrapper";
 import { importFile } from "@/utils/fileImport";
 import { exportCsv, exportXlsx } from "@/utils/fileExport";
 import { SpreadsheetFunction } from "@/data/functions";
+import { compactSheetsForStorage, expandSheetsFromStorage } from "@/utils/sheetCompact";
 
 export default function HomePage() {
   const [sheets, setSheets] = useState<Sheet[]>(DEFAULT_SHEETS);
@@ -50,15 +51,26 @@ export default function HomePage() {
 
       autoSyncTimerRef.current = setTimeout(async () => {
         try {
+          // 거대한 2000x520 null 배열을 제거하여 수 KB 단위로 압축 전송
+          const compactContent = compactSheetsForStorage(updatedSheets);
+
           const res = await fetch("/api/spreadsheets", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: docId,
               title: title,
-              content: updatedSheets,
+              content: compactContent,
             }),
           });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            console.error("Auto-sync failed:", res.status, errText);
+            setSyncStatus("error");
+            return;
+          }
+
           const data = await res.json();
           if (data.success) {
             setSyncStatus("synced");
@@ -105,6 +117,9 @@ export default function HomePage() {
       const currentData = wrapperRef.current?.getData() ?? sheets;
       const docId = currentDocId || `sp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
+      // 압축하여 Vercel Payload 한도(4.5MB) 완벽 준수
+      const compactContent = compactSheetsForStorage(currentData);
+
       setSyncStatus("syncing");
       const res = await fetch("/api/spreadsheets", {
         method: "POST",
@@ -112,9 +127,15 @@ export default function HomePage() {
         body: JSON.stringify({
           id: docId,
           title: title,
-          content: currentData,
+          content: compactContent,
         }),
       });
+
+      if (!res.ok) {
+        setSyncStatus("error");
+        const errText = await res.text();
+        throw new Error(`저장 실패 (${res.status}): ${errText.substring(0, 100)}`);
+      }
 
       const data = await res.json();
       if (!data.success) {
@@ -137,15 +158,21 @@ export default function HomePage() {
       setError(null);
       try {
         const res = await fetch(`/api/spreadsheets/${id}`);
+        if (!res.ok) {
+          throw new Error(`문서 불러오기 실패 (${res.status})`);
+        }
         const data = await res.json();
         if (!data.success || !data.spreadsheet) {
           throw new Error(data.error || "문서를 불러오지 못했습니다.");
         }
 
-        const loadedContent = data.spreadsheet.content;
-        const loadedSheets = Array.isArray(loadedContent) ? loadedContent : [loadedContent];
+        const loadedRaw = data.spreadsheet.content;
+        const loadedArray = Array.isArray(loadedRaw) ? loadedRaw : [loadedRaw];
+        
+        // 2000행 x 520열 대용량 캔버스 그리드로 복원
+        const expandedSheets = expandSheetsFromStorage(loadedArray);
 
-        setSheets(loadedSheets);
+        setSheets(expandedSheets);
         setCurrentDocId(id);
         setCurrentDocTitle(title);
         setSyncStatus("synced");
