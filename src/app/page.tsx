@@ -7,6 +7,7 @@ import Toolbar from "@/components/Toolbar";
 import SpreadsheetDynamic from "@/components/SpreadsheetDynamic";
 import DbSaveModal from "@/components/DbSaveModal";
 import DbListModal from "@/components/DbListModal";
+import LoginScreen from "@/components/LoginScreen";
 import type { SpreadsheetWrapperHandle } from "@/components/SpreadsheetWrapper";
 import { DEFAULT_SHEETS } from "@/components/SpreadsheetWrapper";
 import { importFile } from "@/utils/fileImport";
@@ -15,6 +16,9 @@ import { SpreadsheetFunction } from "@/data/functions";
 import { compactSheetsForStorage, expandSheetsFromStorage } from "@/utils/sheetCompact";
 
 export default function HomePage() {
+  // 관리자 인증 상태 (초기 null: 클라이언트 검사 전)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
   const [sheets, setSheets] = useState<Sheet[]>(DEFAULT_SHEETS);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [currentDocTitle, setCurrentDocTitle] = useState<string>("새 스프레드시트");
@@ -33,12 +37,34 @@ export default function HomePage() {
 
   const currentSheetName = currentDocTitle || sheets[0]?.name || "Sheet1";
 
+  // 인증 상태 확인
+  useEffect(() => {
+    try {
+      const isAuth =
+        sessionStorage.getItem("hyunscsv_auth") === "true" ||
+        localStorage.getItem("hyunscsv_auth") === "true";
+      setIsAuthenticated(isAuth);
+    } catch {
+      setIsAuthenticated(false);
+    }
+  }, []);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => {
       setToast((prev) => (prev === msg ? null : prev));
     }, 3000);
   }, []);
+
+  /** 로그아웃 핸들러 */
+  const handleLogout = useCallback(() => {
+    try {
+      sessionStorage.removeItem("hyunscsv_auth");
+      localStorage.removeItem("hyunscsv_auth");
+    } catch {}
+    setIsAuthenticated(false);
+    showToast("로그아웃 되었습니다.");
+  }, [showToast]);
 
   /** Real-time Debounced Auto-Sync to Neon DB */
   const triggerAutoSync = useCallback(
@@ -276,6 +302,20 @@ export default function HomePage() {
     [showToast]
   );
 
+  // 클라이언트 인증 검사 중
+  if (isAuthenticated === null) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#ffffff" }}>
+        <span className="spinner" style={{ width: "24px", height: "24px" }} />
+      </div>
+    );
+  }
+
+  // 미인증 시 관리자 로그인 화면 노출
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <main
       style={{
@@ -295,6 +335,7 @@ export default function HomePage() {
         onSelectFunction={handleSelectFunction}
         onOpenDbSave={() => setIsDbSaveOpen(true)}
         onOpenDbList={() => setIsDbListOpen(true)}
+        onLogout={handleLogout}
         syncStatus={syncStatus}
         isLoading={isLoading}
         sheetName={currentSheetName}

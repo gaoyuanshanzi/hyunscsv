@@ -13,6 +13,7 @@ interface HeaderProps {
   onSelectFunction: (func: SpreadsheetFunction) => void;
   onOpenDbSave: () => void;
   onOpenDbList: () => void;
+  onLogout?: () => void;
   syncStatus: SyncStatus;
   isLoading: boolean;
   sheetName: string;
@@ -25,6 +26,7 @@ export default function Header({
   onSelectFunction,
   onOpenDbSave,
   onOpenDbList,
+  onLogout,
   syncStatus,
   isLoading,
   sheetName,
@@ -324,6 +326,22 @@ export default function Header({
           </svg>
           XLSX
         </button>
+
+        {onLogout && (
+          <>
+            <div className="toolbar-divider" />
+            <button
+              id="btn-logout"
+              className="btn btn-ghost"
+              onClick={onLogout}
+              data-tooltip="관리자 로그아웃"
+              aria-label="로그아웃"
+              style={{ fontSize: "12px", color: "var(--color-text-muted)", padding: "4px 8px" }}
+            >
+              🔒 로그아웃
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
