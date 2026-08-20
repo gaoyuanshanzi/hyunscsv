@@ -59,13 +59,26 @@ export default function Toolbar({
         onChange={(e) => onCommand("fontFamily", e.target.value)}
         aria-label="폰트 선택"
       >
-        {["Inter", "Arial", "Courier New", "Georgia", "Times New Roman"].map(
-          (f) => (
-            <option key={f} value={f} style={{ fontFamily: f }}>
-              {f}
-            </option>
-          )
-        )}
+        {[
+          { label: "Inter (기본)", value: "Inter" },
+          { label: "Noto Sans JP (일본어 고딕)", value: "'Noto Sans JP', sans-serif" },
+          { label: "Noto Serif JP (일본어 명조)", value: "'Noto Serif JP', serif" },
+          { label: "Meiryo (メイリオ)", value: "Meiryo, 'Noto Sans JP', sans-serif" },
+          { label: "MS Gothic (ＭＳ ゴシック)", value: "'MS Gothic', 'Noto Sans JP', monospace" },
+          { label: "MS Mincho (ＭＳ 明朝)", value: "'MS Mincho', 'Noto Serif JP', serif" },
+          { label: "Yu Gothic (游ゴシック)", value: "'Yu Gothic', 'Noto Sans JP', sans-serif" },
+          { label: "Hiragino Sans (ヒラギノ)", value: "'Hiragino Sans', 'Noto Sans JP', sans-serif" },
+          { label: "Noto Sans KR (한국어)", value: "'Noto Sans KR', sans-serif" },
+          { label: "Malgun Gothic (맑은 고딕)", value: "'Malgun Gothic', sans-serif" },
+          { label: "Arial", value: "Arial" },
+          { label: "Georgia", value: "Georgia" },
+          { label: "Times New Roman", value: "'Times New Roman'" },
+          { label: "Courier New", value: "'Courier New'" },
+        ].map((f) => (
+          <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+            {f.label}
+          </option>
+        ))}
       </select>
 
       {/* Font size */}

@@ -49,7 +49,6 @@ function parseRawCsvText(text: string): RowData[] {
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    // CSV quotation handling regex
     const row: (string | null)[] = [];
     let cur = "";
     let inQuotes = false;
@@ -75,6 +74,80 @@ function parseRawCsvText(text: string): RowData[] {
   }
 
   return rows;
+}
+
+/**
+ * 다국어(일본어 Shift-JIS / CP932 / Windows-31J, EUC-JP, 한국어 EUC-KR / CP949, UTF-8 / UTF-16)
+ * 자동 인코딩 감지 및 무손실 텍스트 디코딩
+ */
+export function decodeBufferAuto(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length === 0) return "";
+
+  // 1. UTF-8 with BOM (\uFEFF -> EF BB BF)
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder("utf-8").decode(buffer.slice(3));
+  }
+
+  // 2. UTF-16 LE BOM (FF FE)
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder("utf-16le").decode(buffer.slice(2));
+  }
+
+  // 3. UTF-16 BE BOM (FE FF)
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    return new TextDecoder("utf-16be").decode(buffer.slice(2));
+  }
+
+  // 4. Strict UTF-8 테스트 (오류 시 즉시 예외 발생하여 Shift-JIS 등으로 전환)
+  try {
+    const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
+    const text = utf8Decoder.decode(buffer);
+    // 대체 문자(\uFFFD)가 없으면 유효한 UTF-8
+    if (!text.includes("\uFFFD")) {
+      return text;
+    }
+  } catch (_) {
+    // UTF-8 바이트 시퀀스가 아님 -> CJK 인코딩 탐색
+  }
+
+  // 5. Shift-JIS (일본어 윈도우/엑셀 표준 CSV 인코딩: CP932)
+  try {
+    const sjisDecoder = new TextDecoder("shift-jis", { fatal: true });
+    const text = sjisDecoder.decode(buffer);
+    if (!text.includes("\uFFFD")) {
+      return text;
+    }
+  } catch (_) {}
+
+  // 6. EUC-JP (일본어 리눅스/유닉스 인코딩)
+  try {
+    const eucJpDecoder = new TextDecoder("euc-jp", { fatal: true });
+    const text = eucJpDecoder.decode(buffer);
+    if (!text.includes("\uFFFD")) {
+      return text;
+    }
+  } catch (_) {}
+
+  // 7. EUC-KR (한국어 윈도우/엑셀 CP949 인코딩)
+  try {
+    const eucKrDecoder = new TextDecoder("euc-kr", { fatal: true });
+    const text = eucKrDecoder.decode(buffer);
+    if (!text.includes("\uFFFD")) {
+      return text;
+    }
+  } catch (_) {}
+
+  // 8. 일본어 Shift-JIS 관용 디코딩 (fallback)
+  try {
+    const fallbackSjis = new TextDecoder("shift-jis", { fatal: false }).decode(buffer);
+    if (fallbackSjis && fallbackSjis.length > 0) {
+      return fallbackSjis;
+    }
+  } catch (_) {}
+
+  // 9. 최종 UTF-8 폴백
+  return new TextDecoder("utf-8", { fatal: false }).decode(buffer);
 }
 
 /**
@@ -167,17 +240,17 @@ export function parseCsv(text: string, fileName = "Sheet1"): Sheet[] {
 }
 
 /**
- * File 객체를 읽어 적절한 Sheet[] 로 로드
+ * File 객체를 읽어 적절한 Sheet[] 로 로드 (다국어/일본어 인코딩 자동 감지)
  */
 export async function importFile(file: File): Promise<Sheet[]> {
   const ext = file.name.split(".").pop()?.toLowerCase();
+  const buffer = await file.arrayBuffer();
   
   if (ext === "csv" || ext === "tsv" || ext === "txt") {
-    const text = await file.text();
+    const text = decodeBufferAuto(buffer);
     return parseCsv(text, file.name);
   }
   
   // xlsx, xls, ods 등 바이너리 엑셀
-  const buffer = await file.arrayBuffer();
   return parseXlsx(buffer);
 }

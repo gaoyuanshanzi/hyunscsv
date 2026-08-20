@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@fortune-sheet/react/dist/index.css";
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap");
 
 :root {
   --color-bg: #ffffff;
@@ -21,7 +22,7 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", "Noto Sans JP", "Hiragino Sans", "Meiryo", "Yu Gothic", "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system, sans-serif;
 }
 
 *, *::before, *::after {
