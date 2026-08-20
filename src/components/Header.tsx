@@ -4,11 +4,16 @@ import React, { useRef } from "react";
 import FormulaSearchBar from "./FormulaSearchBar";
 import { SpreadsheetFunction } from "@/data/functions";
 
+export type SyncStatus = "synced" | "syncing" | "error" | "unsaved";
+
 interface HeaderProps {
   onImport: (file: File) => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
   onSelectFunction: (func: SpreadsheetFunction) => void;
+  onOpenDbSave: () => void;
+  onOpenDbList: () => void;
+  syncStatus: SyncStatus;
   isLoading: boolean;
   sheetName: string;
 }
@@ -18,6 +23,9 @@ export default function Header({
   onExportCsv,
   onExportXlsx,
   onSelectFunction,
+  onOpenDbSave,
+  onOpenDbList,
+  syncStatus,
   isLoading,
   sheetName,
 }: HeaderProps) {
@@ -36,8 +44,8 @@ export default function Header({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "12px",
-        padding: "0 16px",
+        gap: "10px",
+        padding: "0 14px",
         height: "52px",
         background: "var(--color-bg)",
         borderBottom: "1px solid var(--color-border)",
@@ -100,13 +108,13 @@ export default function Header({
             display: "flex",
             alignItems: "center",
             gap: "6px",
-            padding: "3px 10px",
+            padding: "3px 8px",
             background: "var(--color-bg-secondary)",
             border: "1px solid var(--color-border)",
-            borderRadius: "20px",
+            borderRadius: "16px",
             fontSize: "12px",
             color: "var(--color-text-secondary)",
-            maxWidth: "160px",
+            maxWidth: "140px",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -124,11 +132,75 @@ export default function Header({
         </div>
       )}
 
+      {/* Real-time Neon DB Sync Status Badge */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "2px 8px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: 600,
+          background:
+            syncStatus === "synced"
+              ? "#f0fdf4"
+              : syncStatus === "syncing"
+              ? "#fefce8"
+              : syncStatus === "error"
+              ? "#fef2f2"
+              : "#f8fafc",
+          color:
+            syncStatus === "synced"
+              ? "#16a34a"
+              : syncStatus === "syncing"
+              ? "#ca8a04"
+              : syncStatus === "error"
+              ? "#dc2626"
+              : "#64748b",
+          border: `1px solid ${
+            syncStatus === "synced"
+              ? "#bbf7d0"
+              : syncStatus === "syncing"
+              ? "#fef08a"
+              : syncStatus === "error"
+              ? "#fecaca"
+              : "#e2e8f0"
+          }`,
+        }}
+        title="Neon.tech PostgreSQL 실시간 동기화 상태"
+      >
+        <span
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor:
+              syncStatus === "synced"
+                ? "#22c55e"
+                : syncStatus === "syncing"
+                ? "#eab308"
+                : syncStatus === "error"
+                ? "#ef4444"
+                : "#94a3b8",
+          }}
+        />
+        <span>
+          {syncStatus === "synced"
+            ? "DB 동기화됨"
+            : syncStatus === "syncing"
+            ? "동기화 중..."
+            : syncStatus === "error"
+            ? "동기화 오류"
+            : "미저장 문서"}
+        </span>
+      </div>
+
       {/* Loading indicator */}
       {isLoading && <span className="spinner" aria-label="불러오는 중..." />}
 
       {/* Center: Global Formula / Function Search Bar */}
-      <div style={{ marginLeft: "12px" }}>
+      <div style={{ marginLeft: "8px" }}>
         <FormulaSearchBar onSelectFunction={onSelectFunction} />
       </div>
 
@@ -136,7 +208,35 @@ export default function Header({
       <div style={{ flex: 1 }} />
 
       {/* Action buttons */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {/* Neon DB Actions */}
+        <button
+          id="btn-db-save"
+          className="btn btn-secondary"
+          onClick={onOpenDbSave}
+          disabled={isLoading}
+          data-tooltip="현재 시트를 Neon DB에 저장"
+          style={{ borderColor: "#93c5fd", color: "#1d4ed8", background: "#eff6ff" }}
+          aria-label="DB 저장"
+        >
+          <span>☁️</span>
+          <span>DB 저장</span>
+        </button>
+
+        <button
+          id="btn-db-list"
+          className="btn btn-secondary"
+          onClick={onOpenDbList}
+          disabled={isLoading}
+          data-tooltip="Neon DB에 저장된 시트 목록 불러오기"
+          aria-label="DB 목록"
+        >
+          <span>📂</span>
+          <span>DB 목록</span>
+        </button>
+
+        <div className="toolbar-divider" />
+
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -148,13 +248,13 @@ export default function Header({
           aria-label="파일 열기"
         />
 
-        {/* Open file button */}
+        {/* Local file import */}
         <button
           id="btn-open-file"
           className="btn btn-secondary"
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
-          data-tooltip="CSV 또는 XLSX 파일 열기"
+          data-tooltip="로컬 CSV 또는 XLSX 파일 열기"
           aria-label="파일 열기"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -168,8 +268,6 @@ export default function Header({
           </svg>
           파일 열기
         </button>
-
-        <div className="toolbar-divider" />
 
         {/* CSV download */}
         <button

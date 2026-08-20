@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { Sheet } from "@fortune-sheet/core";
-import Header from "@/components/Header";
+import Header, { SyncStatus } from "@/components/Header";
 import Toolbar from "@/components/Toolbar";
 import SpreadsheetDynamic from "@/components/SpreadsheetDynamic";
+import DbSaveModal from "@/components/DbSaveModal";
+import DbListModal from "@/components/DbListModal";
 import type { SpreadsheetWrapperHandle } from "@/components/SpreadsheetWrapper";
 import { DEFAULT_SHEETS } from "@/components/SpreadsheetWrapper";
 import { importFile } from "@/utils/fileImport";
@@ -13,14 +15,22 @@ import { SpreadsheetFunction } from "@/data/functions";
 
 export default function HomePage() {
   const [sheets, setSheets] = useState<Sheet[]>(DEFAULT_SHEETS);
+  const [currentDocId, setCurrentDocId] = useState<string | null>(null);
+  const [currentDocTitle, setCurrentDocTitle] = useState<string>("새 스프레드시트");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("unsaved");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
-  const wrapperRef = useRef<SpreadsheetWrapperHandle | null>(null);
 
-  // Current sheet name for display
-  const currentSheetName = sheets[0]?.name ?? "Sheet1";
+  // Modal States
+  const [isDbSaveOpen, setIsDbSaveOpen] = useState(false);
+  const [isDbListOpen, setIsDbListOpen] = useState(false);
+
+  const wrapperRef = useRef<SpreadsheetWrapperHandle | null>(null);
+  const autoSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const currentSheetName = currentDocTitle || sheets[0]?.name || "Sheet1";
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -29,23 +39,151 @@ export default function HomePage() {
     }, 3000);
   }, []);
 
-  /** Handle file import */
-  const handleImport = useCallback(async (file: File) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const importedSheets = await importFile(file);
-      setSheets(importedSheets);
-      showToast(`"${file.name}" 파일을 성공적으로 불러왔습니다.`);
-    } catch (err) {
-      console.error("파일 불러오기 실패:", err);
-      setError(
-        err instanceof Error ? err.message : "파일을 불러오는 중 오류가 발생했습니다."
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [showToast]);
+  /** Real-time Debounced Auto-Sync to Neon DB */
+  const triggerAutoSync = useCallback(
+    (updatedSheets: Sheet[], docId: string, title: string) => {
+      if (autoSyncTimerRef.current) {
+        clearTimeout(autoSyncTimerRef.current);
+      }
+
+      setSyncStatus("syncing");
+
+      autoSyncTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch("/api/spreadsheets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: docId,
+              title: title,
+              content: updatedSheets,
+            }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            setSyncStatus("synced");
+          } else {
+            console.error("Auto-sync error:", data.error);
+            setSyncStatus("error");
+          }
+        } catch (err) {
+          console.error("Auto-sync network error:", err);
+          setSyncStatus("error");
+        }
+      }, 1500); // 1.5초 디바운스
+    },
+    []
+  );
+
+  /** Handle data change from spreadsheet */
+  const handleDataChange = useCallback(
+    (updatedSheets: Sheet[]) => {
+      setSheets(updatedSheets);
+
+      // 이미 DB에 등록된 문서인 경우 실시간 자동 동기화
+      if (currentDocId) {
+        triggerAutoSync(updatedSheets, currentDocId, currentDocTitle);
+      } else {
+        setSyncStatus("unsaved");
+      }
+    },
+    [currentDocId, currentDocTitle, triggerAutoSync]
+  );
+
+  /** Clean up timer */
+  useEffect(() => {
+    return () => {
+      if (autoSyncTimerRef.current) {
+        clearTimeout(autoSyncTimerRef.current);
+      }
+    };
+  }, []);
+
+  /** Manual Save to Neon DB */
+  const handleDbSave = useCallback(
+    async (title: string) => {
+      const currentData = wrapperRef.current?.getData() ?? sheets;
+      const docId = currentDocId || `sp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+      setSyncStatus("syncing");
+      const res = await fetch("/api/spreadsheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: docId,
+          title: title,
+          content: currentData,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        setSyncStatus("error");
+        throw new Error(data.error || "DB 저장 실패");
+      }
+
+      setCurrentDocId(docId);
+      setCurrentDocTitle(title);
+      setSyncStatus("synced");
+      showToast(`Neon DB에 "${title}" 문서가 저장되었습니다.`);
+    },
+    [currentDocId, sheets, showToast]
+  );
+
+  /** Load spreadsheet from Neon DB */
+  const handleLoadSpreadsheet = useCallback(
+    async (id: string, title: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/spreadsheets/${id}`);
+        const data = await res.json();
+        if (!data.success || !data.spreadsheet) {
+          throw new Error(data.error || "문서를 불러오지 못했습니다.");
+        }
+
+        const loadedContent = data.spreadsheet.content;
+        const loadedSheets = Array.isArray(loadedContent) ? loadedContent : [loadedContent];
+
+        setSheets(loadedSheets);
+        setCurrentDocId(id);
+        setCurrentDocTitle(title);
+        setSyncStatus("synced");
+        showToast(`Neon DB에서 "${title}" 문서를 불러왔습니다.`);
+      } catch (err: any) {
+        console.error("DB 로드 실패:", err);
+        setError(err.message || "문서 로드 중 오류가 발생했습니다.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [showToast]
+  );
+
+  /** Handle local file import */
+  const handleImport = useCallback(
+    async (file: File) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const importedSheets = await importFile(file);
+        const fileName = file.name.replace(/\.[^/.]+$/, "");
+        setSheets(importedSheets);
+        setCurrentDocId(null); // 로컬 파일 로드 시 신규 미저장 상태로 시작
+        setCurrentDocTitle(fileName);
+        setSyncStatus("unsaved");
+        showToast(`"${file.name}" 파일을 성공적으로 불러왔습니다.`);
+      } catch (err) {
+        console.error("파일 불러오기 실패:", err);
+        setError(
+          err instanceof Error ? err.message : "파일을 불러오는 중 오류가 발생했습니다."
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [showToast]
+  );
 
   /** Handle CSV export */
   const handleExportCsv = useCallback(() => {
@@ -56,13 +194,13 @@ export default function HomePage() {
       return;
     }
     try {
-      exportCsv(activeSheet, activeSheet.name ?? "hyunscsv_export");
+      exportCsv(activeSheet, currentDocTitle || activeSheet.name || "hyunscsv_export");
       showToast("CSV 파일 다운로드가 완료되었습니다.");
     } catch (err) {
       console.error("CSV 내보내기 실패:", err);
       setError("CSV 내보내기 중 오류가 발생했습니다.");
     }
-  }, [sheets, showToast]);
+  }, [sheets, currentDocTitle, showToast]);
 
   /** Handle XLSX export */
   const handleExportXlsx = useCallback(() => {
@@ -72,13 +210,13 @@ export default function HomePage() {
       return;
     }
     try {
-      exportXlsx(currentData, "hyunscsv_export");
+      exportXlsx(currentData, currentDocTitle || "hyunscsv_export");
       showToast("XLSX 파일 다운로드가 완료되었습니다.");
     } catch (err) {
       console.error("XLSX 내보내기 실패:", err);
       setError("XLSX 내보내기 중 오류가 발생했습니다.");
     }
-  }, [sheets, showToast]);
+  }, [sheets, currentDocTitle, showToast]);
 
   /** Handle toolbar formatting commands */
   const handleToolbarCommand = useCallback(
@@ -111,11 +249,6 @@ export default function HomePage() {
     [showToast]
   );
 
-  /** Handle data change from spreadsheet */
-  const handleDataChange = useCallback((updatedSheets: Sheet[]) => {
-    setSheets(updatedSheets);
-  }, []);
-
   return (
     <main
       style={{
@@ -133,6 +266,9 @@ export default function HomePage() {
         onExportCsv={handleExportCsv}
         onExportXlsx={handleExportXlsx}
         onSelectFunction={handleSelectFunction}
+        onOpenDbSave={() => setIsDbSaveOpen(true)}
+        onOpenDbList={() => setIsDbListOpen(true)}
+        syncStatus={syncStatus}
         isLoading={isLoading}
         sheetName={currentSheetName}
       />
@@ -223,6 +359,22 @@ export default function HomePage() {
         sheets={sheets}
         onDataChange={handleDataChange}
         wrapperRef={wrapperRef}
+      />
+
+      {/* Neon DB Save Modal */}
+      <DbSaveModal
+        isOpen={isDbSaveOpen}
+        onClose={() => setIsDbSaveOpen(false)}
+        onSave={handleDbSave}
+        defaultTitle={currentDocTitle}
+      />
+
+      {/* Neon DB List & Load Modal */}
+      <DbListModal
+        isOpen={isDbListOpen}
+        onClose={() => setIsDbListOpen(false)}
+        onLoadSpreadsheet={handleLoadSpreadsheet}
+        currentDocId={currentDocId}
       />
     </main>
   );

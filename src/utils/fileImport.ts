@@ -4,6 +4,9 @@ import type { Sheet, Cell } from "@fortune-sheet/core";
 /** SheetJS row-data 타입 (셀값 배열) */
 type RowData = (string | number | boolean | null | undefined)[];
 
+export const DEFAULT_ROW_COUNT = 2000;
+export const DEFAULT_COL_COUNT = 520; // 26 * 20 (A ~ TZ)
+
 /**
  * 2D 원시 배열(AoA)을 FortuneSheet의 data(2D Matrix) 및 celldata(희소 배열)로 동시 변환
  */
@@ -93,10 +96,10 @@ export function parseXlsx(buffer: ArrayBuffer): Sheet[] {
         }) as RowData[])
       : [];
 
-    const maxRow = Math.max(aoa.length + 20, 100);
+    const maxRow = Math.max(aoa.length + 50, DEFAULT_ROW_COUNT);
     const maxCol = Math.max(
-      Math.max(...aoa.map((r) => (r ? r.length : 0)), 0) + 10,
-      26
+      Math.max(...aoa.map((r) => (r ? r.length : 0)), 0) + 20,
+      DEFAULT_COL_COUNT
     );
 
     const { celldata, matrix } = aoaToFortuneData(aoa, maxRow, maxCol);
@@ -141,10 +144,10 @@ export function parseCsv(text: string, fileName = "Sheet1"): Sheet[] {
   }
 
   const sheetDisplayName = fileName.replace(/\.[^/.]+$/, "") || "Sheet1";
-  const maxRow = Math.max(aoa.length + 20, 100);
+  const maxRow = Math.max(aoa.length + 50, DEFAULT_ROW_COUNT);
   const maxCol = Math.max(
-    Math.max(...aoa.map((r) => (r ? r.length : 0)), 0) + 10,
-    26
+    Math.max(...aoa.map((r) => (r ? r.length : 0)), 0) + 20,
+    DEFAULT_COL_COUNT
   );
 
   const { celldata, matrix } = aoaToFortuneData(aoa, maxRow, maxCol);

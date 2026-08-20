@@ -18,14 +18,14 @@ interface Props {
   wrapperRef?: React.MutableRefObject<SpreadsheetWrapperHandle | null>;
 }
 
-/** 기본 빈 시트 */
+/** 기본 빈 시트 (2,000행 x 520열 = Z열의 20배) */
 export const DEFAULT_SHEETS: Sheet[] = [
   {
     id: "sheet_default_1",
     name: "Sheet1",
     celldata: [],
-    row: 100,
-    column: 26,
+    row: 2000,
+    column: 520,
     status: 1,
     order: 0,
   },
