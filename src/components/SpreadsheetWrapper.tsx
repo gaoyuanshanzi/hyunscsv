@@ -185,7 +185,7 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
                   newFa = "0.0%";
                 }
               } else if (fa.includes(".")) {
-                newFa = fa.replace(/\.(0+)/, (_, zeros) => `.${zeros}0`);
+                newFa = fa.replace(/\.(0+)/, (_: string, zeros: string) => `.${zeros}0`);
               } else if (fa.includes("#,##0")) {
                 newFa = "#,##0.0";
               } else if (fa === "0") {
@@ -205,7 +205,7 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
               if (fa.includes("%")) {
                 const match = fa.match(/0\.0+(0)%/);
                 if (match) {
-                  newFa = fa.replace(/0(\.0+)%/, (_, zeros) => {
+                  newFa = fa.replace(/0(\.0+)%/, (_: string, zeros: string) => {
                     const remaining = zeros.slice(0, -1);
                     return remaining === "." ? "0%" : `0${remaining}%`;
                   });
@@ -213,7 +213,7 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
                   newFa = "0%";
                 }
               } else if (fa.includes(".")) {
-                newFa = fa.replace(/\.(0+)/, (_, zeros) => {
+                newFa = fa.replace(/\.(0+)/, (_: string, zeros: string) => {
                   const remaining = zeros.slice(0, -1);
                   return remaining.length > 0 ? `.${remaining}` : "";
                 });
