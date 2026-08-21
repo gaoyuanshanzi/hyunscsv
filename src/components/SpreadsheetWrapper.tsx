@@ -163,6 +163,77 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
               wb.setCellFormatByRange("tb", next, range);
               break;
             }
+            case "formatPercent": {
+              wb.setCellFormatByRange("ct", { fa: "0.00%", t: "n" }, range);
+              break;
+            }
+            case "formatComma": {
+              wb.setCellFormatByRange("ct", { fa: "#,##0", t: "n" }, range);
+              break;
+            }
+            case "increaseDecimal": {
+              const curCt = wb.getCellValue(r, c, { type: "ct" });
+              const fa = curCt?.fa || "General";
+              let newFa = "#,##0.0";
+
+              if (fa.includes("%")) {
+                const match = fa.match(/0(\.0+)?%/);
+                if (match && match[1]) {
+                  const zeros = match[1].substring(1);
+                  newFa = `0.${zeros}0%`;
+                } else {
+                  newFa = "0.0%";
+                }
+              } else if (fa.includes(".")) {
+                newFa = fa.replace(/\.(0+)/, (_, zeros) => `.${zeros}0`);
+              } else if (fa.includes("#,##0")) {
+                newFa = "#,##0.0";
+              } else if (fa === "0") {
+                newFa = "0.0";
+              } else {
+                newFa = "#,##0.0";
+              }
+
+              wb.setCellFormatByRange("ct", { fa: newFa, t: "n" }, range);
+              break;
+            }
+            case "decreaseDecimal": {
+              const curCt = wb.getCellValue(r, c, { type: "ct" });
+              const fa = curCt?.fa || "General";
+              let newFa = "#,##0";
+
+              if (fa.includes("%")) {
+                const match = fa.match(/0\.0+(0)%/);
+                if (match) {
+                  newFa = fa.replace(/0(\.0+)%/, (_, zeros) => {
+                    const remaining = zeros.slice(0, -1);
+                    return remaining === "." ? "0%" : `0${remaining}%`;
+                  });
+                } else {
+                  newFa = "0%";
+                }
+              } else if (fa.includes(".")) {
+                newFa = fa.replace(/\.(0+)/, (_, zeros) => {
+                  const remaining = zeros.slice(0, -1);
+                  return remaining.length > 0 ? `.${remaining}` : "";
+                });
+              } else if (fa.includes("#,##0")) {
+                newFa = "#,##0";
+              } else {
+                newFa = "0";
+              }
+
+              wb.setCellFormatByRange("ct", { fa: newFa, t: "n" }, range);
+              break;
+            }
+            case "formatDate": {
+              wb.setCellFormatByRange("ct", { fa: "yyyy-mm-dd", t: "d" }, range);
+              break;
+            }
+            case "formatTime": {
+              wb.setCellFormatByRange("ct", { fa: "hh:mm:ss", t: "d" }, range);
+              break;
+            }
             case "merge": {
               try {
                 wb.mergeCells(selection, "merge-all");

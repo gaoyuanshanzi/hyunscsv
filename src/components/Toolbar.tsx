@@ -53,7 +53,7 @@ export default function Toolbar({
           background: "var(--color-bg)",
           color: "var(--color-text-primary)",
           cursor: "pointer",
-          minWidth: "100px",
+          minWidth: "110px",
         }}
         onMouseDown={(e) => e.stopPropagation()}
         onChange={(e) => onCommand("fontFamily", e.target.value)}
@@ -172,6 +172,82 @@ export default function Toolbar({
           </text>
           <line x1="2" y1="13" x2="12" y2="13" stroke="currentColor" strokeWidth="1.5" />
         </svg>
+      </ToolbarButton>
+
+      <div className="toolbar-divider" />
+
+      {/* ── 셀 / 숫자 서식 섹션 (Number & Date Formats) ── */}
+
+      {/* 쉼표 스타일 (000마다 콤마) */}
+      <ToolbarButton
+        id="toolbar-comma"
+        label="쉼표 스타일 (1,000 단위 구분)"
+        active={false}
+        onClick={() => onCommand("formatComma")}
+        aria-label="쉼표 스타일"
+      >
+        <span style={{ fontSize: "15px", fontWeight: 800, fontFamily: "sans-serif", lineHeight: 1 }}>,</span>
+      </ToolbarButton>
+
+      {/* 백분율 (%) */}
+      <ToolbarButton
+        id="toolbar-percent"
+        label="백분율 (%)"
+        active={false}
+        onClick={() => onCommand("formatPercent")}
+        aria-label="백분율"
+      >
+        <span style={{ fontSize: "13px", fontWeight: 700, fontFamily: "sans-serif" }}>%</span>
+      </ToolbarButton>
+
+      {/* 자릿수 하나 늘임 */}
+      <ToolbarButton
+        id="toolbar-increase-decimal"
+        label="자릿수 하나 늘임 (.0 ➔ .00)"
+        active={false}
+        onClick={() => onCommand("increaseDecimal")}
+        aria-label="자릿수 하나 늘임"
+      >
+        <IncreaseDecimalIcon />
+      </ToolbarButton>
+
+      {/* 자릿수 하나 줄임 */}
+      <ToolbarButton
+        id="toolbar-decrease-decimal"
+        label="자릿수 하나 줄임 (.00 ➔ .0)"
+        active={false}
+        onClick={() => onCommand("decreaseDecimal")}
+        aria-label="자릿수 하나 줄임"
+      >
+        <DecreaseDecimalIcon />
+      </ToolbarButton>
+
+      {/* 날짜 버튼 */}
+      <ToolbarButton
+        id="toolbar-date"
+        label="날짜 서식 (YYYY-MM-DD)"
+        active={false}
+        onClick={() => onCommand("formatDate")}
+        aria-label="날짜"
+      >
+        <span style={{ fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "3px" }}>
+          <DateIcon />
+          <span>날짜</span>
+        </span>
+      </ToolbarButton>
+
+      {/* 시간 버튼 */}
+      <ToolbarButton
+        id="toolbar-time"
+        label="시간 서식 (HH:MM:SS)"
+        active={false}
+        onClick={() => onCommand("formatTime")}
+        aria-label="시간"
+      >
+        <span style={{ fontSize: "11px", fontWeight: 600, display: "flex", alignItems: "center", gap: "3px" }}>
+          <TimeIcon />
+          <span>시간</span>
+        </span>
       </ToolbarButton>
 
       <div className="toolbar-divider" />
@@ -353,6 +429,50 @@ function ToolbarButton({ id, label, active, onClick, children, "aria-label": ari
     >
       {children}
     </button>
+  );
+}
+
+function IncreaseDecimalIcon() {
+  return (
+    <svg width="18" height="14" viewBox="0 0 18 14" fill="none" style={{ verticalAlign: "middle" }}>
+      <text x="0" y="11" style={{ fontSize: "10px", fontWeight: 700, fontFamily: "sans-serif" }} fill="currentColor">
+        .00
+      </text>
+      <path d="M17 4l-3 3 3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="14" y1="7" x2="18" y2="7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DecreaseDecimalIcon() {
+  return (
+    <svg width="18" height="14" viewBox="0 0 18 14" fill="none" style={{ verticalAlign: "middle" }}>
+      <text x="0" y="11" style={{ fontSize: "10px", fontWeight: 700, fontFamily: "sans-serif" }} fill="currentColor">
+        .0
+      </text>
+      <path d="M14 4l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="17" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DateIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+      <rect x="1" y="2.5" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <line x1="1" y1="5.5" x2="13" y2="5.5" stroke="currentColor" strokeWidth="1.2" />
+      <line x1="4" y1="1" x2="4" y2="3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="10" y1="1" x2="10" y2="3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TimeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+      <polyline points="7,3.5 7,7 9.5,8.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
