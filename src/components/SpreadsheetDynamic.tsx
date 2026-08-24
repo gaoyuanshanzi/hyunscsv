@@ -75,14 +75,16 @@ interface Props {
   sheets: Sheet[];
   onDataChange: (sheets: Sheet[]) => void;
   wrapperRef: React.MutableRefObject<SpreadsheetWrapperHandle | null>;
+  reloadToken?: number;
 }
 
-export default function SpreadsheetDynamic({ sheets, onDataChange, wrapperRef }: Props) {
+export default function SpreadsheetDynamic({ sheets, onDataChange, wrapperRef, reloadToken = 0 }: Props) {
   return (
     <SpreadsheetWrapper
       sheets={sheets.length > 0 ? sheets : DEFAULT_SHEETS}
       onDataChange={onDataChange}
       wrapperRef={wrapperRef}
+      reloadToken={reloadToken}
     />
   );
 }

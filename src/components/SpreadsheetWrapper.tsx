@@ -16,6 +16,8 @@ interface Props {
   sheets: Sheet[];
   onDataChange: (sheets: Sheet[]) => void;
   wrapperRef?: React.MutableRefObject<SpreadsheetWrapperHandle | null>;
+  /** DB 불러오기나 새 파일 생성 시마다 증가시켜 강제 리마운트를 유발 */
+  reloadToken?: number;
 }
 
 /** 기본 빈 시트 (2,000행 x 520열 = Z열의 20배) */
@@ -31,7 +33,7 @@ export const DEFAULT_SHEETS: Sheet[] = [
   },
 ];
 
-export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }: Props) {
+export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, reloadToken = 0 }: Props) {
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
 
@@ -40,10 +42,10 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef }:
     internalSheetsRef.current = sheets;
   }, [sheets]);
 
-  // 새로운 시트가 로드될 때 Workbook이 완전하게 새 데이터를 마운트하도록 고유 key 부여
+  // reloadToken이 바뀔 때마다(DB 불러오기, 새 파일) 항상 Workbook을 새로 마운트
   const workbookKey = useMemo(() => {
-    return sheets.map((s) => s.id || s.name).join("-") + "-" + (sheets[0]?.row || 100);
-  }, [sheets]);
+    return `wb-${reloadToken}-${sheets.map((s) => s.id || s.name).join("-")}-${sheets[0]?.row || 100}`;
+  }, [sheets, reloadToken]);
 
   // 데이터 변경 핸들러 (onChange)
   const handleChange = useCallback(

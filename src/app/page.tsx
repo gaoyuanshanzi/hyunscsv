@@ -27,6 +27,8 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
+  /** DB 불러오기/새 파일 생성 시마다 증가 → Workbook 강제 리마운트 */
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Modal States
   const [isDbSaveOpen, setIsDbSaveOpen] = useState(false);
@@ -202,6 +204,8 @@ export default function HomePage() {
         setCurrentDocId(id);
         setCurrentDocTitle(title);
         setSyncStatus("synced");
+        // Workbook 강제 리마운트: key가 바뀌어야 FortuneSheet가 새 데이터를 반영
+        setReloadToken((t) => t + 1);
         showToast(`Neon DB에서 "${title}" 문서를 불러왔습니다.`);
       } catch (err: any) {
         console.error("DB 로드 실패:", err);
@@ -212,6 +216,19 @@ export default function HomePage() {
     },
     [showToast]
   );
+
+  /** 새 파일 만들기 */
+  const handleNewFile = useCallback(() => {
+    if (!confirm("현재 작업 내용이 사라집니다. 새 파일을 만드시겠습니까?")) return;
+    setSheets(DEFAULT_SHEETS);
+    setCurrentDocId(null);
+    setCurrentDocTitle("새 스프레드시트");
+    setSyncStatus("unsaved");
+    setError(null);
+    // Workbook 강제 리마운트
+    setReloadToken((t) => t + 1);
+    showToast("새 스프레드시트를 시작합니다.");
+  }, [showToast]);
 
   /** Handle local file import */
   const handleImport = useCallback(
@@ -225,6 +242,8 @@ export default function HomePage() {
         setCurrentDocId(null); // 로컬 파일 로드 시 신규 미저장 상태로 시작
         setCurrentDocTitle(fileName);
         setSyncStatus("unsaved");
+        // Workbook 강제 리마운트
+        setReloadToken((t) => t + 1);
         showToast(`"${file.name}" 파일을 성공적으로 불러왔습니다.`);
       } catch (err) {
         console.error("파일 불러오기 실패:", err);
@@ -335,6 +354,7 @@ export default function HomePage() {
         onSelectFunction={handleSelectFunction}
         onOpenDbSave={() => setIsDbSaveOpen(true)}
         onOpenDbList={() => setIsDbListOpen(true)}
+        onNewFile={handleNewFile}
         onLogout={handleLogout}
         syncStatus={syncStatus}
         isLoading={isLoading}
@@ -427,6 +447,7 @@ export default function HomePage() {
         sheets={sheets}
         onDataChange={handleDataChange}
         wrapperRef={wrapperRef}
+        reloadToken={reloadToken}
       />
 
       {/* Neon DB Save Modal */}

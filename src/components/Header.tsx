@@ -13,6 +13,7 @@ interface HeaderProps {
   onSelectFunction: (func: SpreadsheetFunction) => void;
   onOpenDbSave: () => void;
   onOpenDbList: () => void;
+  onNewFile?: () => void;
   onLogout?: () => void;
   syncStatus: SyncStatus;
   isLoading: boolean;
@@ -26,6 +27,7 @@ export default function Header({
   onSelectFunction,
   onOpenDbSave,
   onOpenDbList,
+  onNewFile,
   onLogout,
   syncStatus,
   isLoading,
@@ -211,6 +213,32 @@ export default function Header({
 
       {/* Action buttons */}
       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {/* 새 파일 만들기 */}
+        {onNewFile && (
+          <button
+            id="btn-new-file"
+            className="btn btn-secondary"
+            onClick={onNewFile}
+            disabled={isLoading}
+            data-tooltip="새 빈 스프레드시트 만들기"
+            aria-label="새 파일"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M3 1h5.5L12 4.5V13H3V1z"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+                fill="none"
+              />
+              <path d="M8 1v4h4" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="7.5" y1="7.5" x2="7.5" y2="10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              <line x1="6" y1="9" x2="9" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            새 파일
+          </button>
+        )}
+
         {/* Neon DB Actions */}
         <button
           id="btn-db-save"

@@ -89,9 +89,20 @@ export function expandSheetsFromStorage(sheets: Sheet[]): Sheet[] {
     );
 
     const celldata = sheet.celldata || [];
+    const normalizedCelldata: CellWithRowAndCol[] = [];
+
     celldata.forEach(({ r, c, v }) => {
-      if (r < rowCount && c < colCount) {
-        matrix[r][c] = v;
+      if (r < rowCount && c < colCount && v !== null && v !== undefined) {
+        const cellObj: Cell =
+          typeof v === "object"
+            ? v
+            : {
+                v: v,
+                m: String(v),
+                ct: { fa: "General", t: typeof v === "number" ? "n" : "s" },
+              };
+        matrix[r][c] = cellObj;
+        normalizedCelldata.push({ r, c, v: cellObj });
       }
     });
 
@@ -101,7 +112,7 @@ export function expandSheetsFromStorage(sheets: Sheet[]): Sheet[] {
       status: sheet.status ?? (idx === 0 ? 1 : 0),
       row: rowCount,
       column: colCount,
-      celldata: celldata,
+      celldata: normalizedCelldata,
       data: matrix,
     } satisfies Sheet;
   });
