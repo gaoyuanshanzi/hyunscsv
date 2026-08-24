@@ -58,16 +58,6 @@ export default function HomePage() {
     }, 3000);
   }, []);
 
-  /** 로그아웃 핸들러 */
-  const handleLogout = useCallback(() => {
-    try {
-      sessionStorage.removeItem("hyunscsv_auth");
-      localStorage.removeItem("hyunscsv_auth");
-    } catch {}
-    setIsAuthenticated(false);
-    showToast("로그아웃 되었습니다.");
-  }, [showToast]);
-
   /** Real-time Debounced Auto-Sync to Neon DB */
   const triggerAutoSync = useCallback(
     (updatedSheets: Sheet[], docId: string, title: string) => {
@@ -174,6 +164,10 @@ export default function HomePage() {
       setCurrentDocId(docId);
       setCurrentDocTitle(title);
       setSyncStatus("synced");
+      try {
+        localStorage.setItem("hyunscsv_last_doc_id", docId);
+        localStorage.setItem("hyunscsv_last_doc_title", title);
+      } catch {}
       showToast(`Neon DB에 "${title}" 문서가 저장되었습니다.`);
     },
     [currentDocId, sheets, showToast]
@@ -206,6 +200,10 @@ export default function HomePage() {
         setSyncStatus("synced");
         // Workbook 강제 리마운트: key가 바뀌어야 FortuneSheet가 새 데이터를 반영
         setReloadToken((t) => t + 1);
+        try {
+          localStorage.setItem("hyunscsv_last_doc_id", id);
+          localStorage.setItem("hyunscsv_last_doc_title", title);
+        } catch {}
         showToast(`Neon DB에서 "${title}" 문서를 불러왔습니다.`);
       } catch (err: any) {
         console.error("DB 로드 실패:", err);
@@ -217,6 +215,48 @@ export default function HomePage() {
     [showToast]
   );
 
+  /** 로그인 시 마지막 작업하던 문서 자동 복원 */
+  useEffect(() => {
+    if (isAuthenticated) {
+      try {
+        const lastDocId = localStorage.getItem("hyunscsv_last_doc_id");
+        const lastDocTitle = localStorage.getItem("hyunscsv_last_doc_title");
+        if (lastDocId && lastDocTitle) {
+          handleLoadSpreadsheet(lastDocId, lastDocTitle);
+        }
+      } catch {}
+    }
+  }, [isAuthenticated, handleLoadSpreadsheet]);
+
+  /** 로그아웃 핸들러 */
+  const handleLogout = useCallback(async () => {
+    // 작업 중인 문서가 있으면 즉시 마지막 상태를 저장 후 로그아웃
+    if (currentDocId) {
+      try {
+        const currentData = wrapperRef.current?.getData() ?? sheets;
+        const compactContent = compactSheetsForStorage(currentData);
+        await fetch("/api/spreadsheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: currentDocId,
+            title: currentDocTitle,
+            content: compactContent,
+          }),
+        });
+      } catch (err) {
+        console.warn("로그아웃 전 저장 경고:", err);
+      }
+    }
+
+    try {
+      sessionStorage.removeItem("hyunscsv_auth");
+      localStorage.removeItem("hyunscsv_auth");
+    } catch {}
+    setIsAuthenticated(false);
+    showToast("로그아웃 되었습니다.");
+  }, [currentDocId, currentDocTitle, sheets, showToast]);
+
   /** 새 파일 만들기 */
   const handleNewFile = useCallback(() => {
     if (!confirm("현재 작업 내용이 사라집니다. 새 파일을 만드시겠습니까?")) return;
@@ -225,6 +265,10 @@ export default function HomePage() {
     setCurrentDocTitle("새 스프레드시트");
     setSyncStatus("unsaved");
     setError(null);
+    try {
+      localStorage.removeItem("hyunscsv_last_doc_id");
+      localStorage.removeItem("hyunscsv_last_doc_title");
+    } catch {}
     // Workbook 강제 리마운트
     setReloadToken((t) => t + 1);
     showToast("새 스프레드시트를 시작합니다.");

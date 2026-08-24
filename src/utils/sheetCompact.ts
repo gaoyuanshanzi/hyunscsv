@@ -11,15 +11,14 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
   if (!sheets || !Array.isArray(sheets)) return [];
 
   return sheets.map((sheet, idx) => {
-    const compactCelldata: CellWithRowAndCol[] = [];
+    const cellMap = new Map<string, CellWithRowAndCol>();
 
-    // 1. sheet.data(2D 매트릭스)에서 실제 데이터가 있는 셀만 추출
+    // 1. sheet.data(2D 매트릭스)에서 실제 데이터가 있는 셀 추출
     if (sheet.data && Array.isArray(sheet.data)) {
       sheet.data.forEach((row, r) => {
         if (!row || !Array.isArray(row)) return;
         row.forEach((cell, c) => {
           if (cell !== null && cell !== undefined) {
-            // 셀 객체 또는 원시값 검증
             if (typeof cell === "object") {
               const hasValue =
                 (cell.v !== undefined && cell.v !== null && cell.v !== "") ||
@@ -32,10 +31,10 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
                 cell.un ||
                 cell.mc;
               if (hasValue) {
-                compactCelldata.push({ r, c, v: cell });
+                cellMap.set(`${r}_${c}`, { r, c, v: cell });
               }
             } else if (cell !== "") {
-              compactCelldata.push({
+              cellMap.set(`${r}_${c}`, {
                 r,
                 c,
                 v: {
@@ -50,14 +49,19 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
       });
     }
 
-    // 2. 만약 sheet.data가 비어있고 celldata가 있다면 celldata 사용
-    if (compactCelldata.length === 0 && sheet.celldata && Array.isArray(sheet.celldata)) {
+    // 2. sheet.celldata에서도 병합 (data에서 누락된 셀이 있다면 포함)
+    if (sheet.celldata && Array.isArray(sheet.celldata)) {
       sheet.celldata.forEach((item) => {
         if (item && item.v !== null && item.v !== undefined) {
-          compactCelldata.push(item);
+          const key = `${item.r}_${item.c}`;
+          if (!cellMap.has(key)) {
+            cellMap.set(key, item);
+          }
         }
       });
     }
+
+    const compactCelldata = Array.from(cellMap.values());
 
     return {
       id: sheet.id || `sheet_${Date.now()}_${idx}`,
