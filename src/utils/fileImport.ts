@@ -10,20 +10,24 @@ export const DEFAULT_COL_COUNT = 520; // 26 * 20 (A ~ TZ)
 /**
  * 2D 원시 배열(AoA)을 FortuneSheet의 data(2D Matrix) 및 celldata(희소 배열)로 동시 변환
  */
-function aoaToFortuneData(aoa: RowData[], rowCount: number, colCount: number) {
+function aoaToFortuneData(aoa: RowData[], rowCount: number, colCount: number, sheetId = "sheet_1") {
   const celldata: Sheet["celldata"] = [];
   const matrix: (Cell | null)[][] = Array.from({ length: rowCount }, () =>
     new Array(colCount).fill(null)
   );
+  const calcChain: { r: number; c: number; id: string }[] = [];
 
   aoa.forEach((row, r) => {
     if (!row || !Array.isArray(row)) return;
     row.forEach((val, c) => {
       if (val === null || val === undefined || val === "") return;
+      const strVal = String(val);
+      const isFormulaCell = strVal.startsWith("=");
       const cellObj: Cell = {
         v: val,
-        m: String(val),
+        m: strVal,
         ct: { fa: "General", t: typeof val === "number" ? "n" : "s" },
+        ...(isFormulaCell ? { f: strVal } : {}),
       };
       celldata.push({
         r,
@@ -33,10 +37,13 @@ function aoaToFortuneData(aoa: RowData[], rowCount: number, colCount: number) {
       if (r < rowCount && c < colCount) {
         matrix[r][c] = cellObj;
       }
+      if (isFormulaCell) {
+        calcChain.push({ r, c, id: sheetId });
+      }
     });
   });
 
-  return { celldata, matrix };
+  return { celldata, matrix, calcChain };
 }
 
 /**
@@ -175,15 +182,17 @@ export function parseXlsx(buffer: ArrayBuffer): Sheet[] {
       DEFAULT_COL_COUNT
     );
 
-    const { celldata, matrix } = aoaToFortuneData(aoa, maxRow, maxCol);
+    const sheetId = `sheet_${Date.now()}_${idx}`;
+    const { celldata, matrix, calcChain } = aoaToFortuneData(aoa, maxRow, maxCol, sheetId);
 
     return {
-      id: `sheet_${Date.now()}_${idx}`,
+      id: sheetId,
       name,
       status: idx === 0 ? 1 : 0,
       order: idx,
       celldata,
       data: matrix,
+      calcChain,
       row: maxRow,
       column: maxCol,
     } satisfies Sheet;
@@ -223,16 +232,18 @@ export function parseCsv(text: string, fileName = "Sheet1"): Sheet[] {
     DEFAULT_COL_COUNT
   );
 
-  const { celldata, matrix } = aoaToFortuneData(aoa, maxRow, maxCol);
+  const sheetId = `sheet_${Date.now()}`;
+  const { celldata, matrix, calcChain } = aoaToFortuneData(aoa, maxRow, maxCol, sheetId);
 
   return [
     {
-      id: `sheet_${Date.now()}`,
+      id: sheetId,
       name: sheetDisplayName,
       status: 1,
       order: 0,
       celldata,
       data: matrix,
+      calcChain,
       row: maxRow,
       column: maxCol,
     },

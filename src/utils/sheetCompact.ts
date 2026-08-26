@@ -11,7 +11,9 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
   if (!sheets || !Array.isArray(sheets)) return [];
 
   return sheets.map((sheet, idx) => {
+    const sheetId = sheet.id || `sheet_${Date.now()}_${idx}`;
     const cellMap = new Map<string, CellWithRowAndCol>();
+    const calcChain: { r: number; c: number; id: string }[] = [];
 
     // 1. sheet.data(2D 매트릭스)에서 실제 데이터가 있는 셀 추출
     if (sheet.data && Array.isArray(sheet.data)) {
@@ -31,18 +33,27 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
                 cell.un ||
                 cell.mc;
               if (hasValue) {
+                if (typeof cell.v === "string" && cell.v.startsWith("=") && !cell.f) {
+                  cell.f = cell.v;
+                }
                 cellMap.set(`${r}_${c}`, { r, c, v: cell });
+                if (cell.f) {
+                  calcChain.push({ r, c, id: sheetId });
+                }
               }
             } else if (cell !== "") {
-              cellMap.set(`${r}_${c}`, {
-                r,
-                c,
-                v: {
-                  v: cell,
-                  m: String(cell),
-                  ct: { fa: "General", t: typeof cell === "number" ? "n" : "s" },
-                },
-              });
+              const strVal = String(cell);
+              const isFormulaCell = strVal.startsWith("=");
+              const cellObj: Cell = {
+                v: cell,
+                m: strVal,
+                ct: { fa: "General", t: typeof cell === "number" ? "n" : "s" },
+                ...(isFormulaCell ? { f: strVal } : {}),
+              };
+              cellMap.set(`${r}_${c}`, { r, c, v: cellObj });
+              if (isFormulaCell) {
+                calcChain.push({ r, c, id: sheetId });
+              }
             }
           }
         });
@@ -55,7 +66,14 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
         if (item && item.v !== null && item.v !== undefined) {
           const key = `${item.r}_${item.c}`;
           if (!cellMap.has(key)) {
+            const cell = item.v;
+            if (typeof cell === "object" && typeof cell.v === "string" && cell.v.startsWith("=") && !cell.f) {
+              cell.f = cell.v;
+            }
             cellMap.set(key, item);
+            if (typeof cell === "object" && cell.f) {
+              calcChain.push({ r: item.r, c: item.c, id: sheetId });
+            }
           }
         }
       });
@@ -64,7 +82,7 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
     const compactCelldata = Array.from(cellMap.values());
 
     return {
-      id: sheet.id || `sheet_${Date.now()}_${idx}`,
+      id: sheetId,
       name: sheet.name || `Sheet${idx + 1}`,
       status: sheet.status ?? (idx === 0 ? 1 : 0),
       order: sheet.order ?? idx,
@@ -72,6 +90,7 @@ export function compactSheetsForStorage(sheets: Sheet[]): Sheet[] {
       column: sheet.column || DEFAULT_COL_COUNT,
       config: sheet.config || {},
       celldata: compactCelldata,
+      calcChain: calcChain.length > 0 ? calcChain : (sheet.calcChain as any) || [],
       // 거대한 2D null 배열은 제거하여 전송 크기 최소화
       data: undefined,
     } satisfies Sheet;
@@ -85,6 +104,7 @@ export function expandSheetsFromStorage(sheets: Sheet[]): Sheet[] {
   if (!sheets || !Array.isArray(sheets)) return [];
 
   return sheets.map((sheet, idx) => {
+    const sheetId = sheet.id || `sheet_${Date.now()}_${idx}`;
     const rowCount = Math.max(sheet.row || DEFAULT_ROW_COUNT, DEFAULT_ROW_COUNT);
     const colCount = Math.max(sheet.column || DEFAULT_COL_COUNT, DEFAULT_COL_COUNT);
 
@@ -94,29 +114,43 @@ export function expandSheetsFromStorage(sheets: Sheet[]): Sheet[] {
 
     const celldata = sheet.celldata || [];
     const normalizedCelldata: CellWithRowAndCol[] = [];
+    const calcChain: { r: number; c: number; id: string }[] = [];
 
     celldata.forEach(({ r, c, v }) => {
       if (r < rowCount && c < colCount && v !== null && v !== undefined) {
-        const cellObj: Cell =
-          typeof v === "object"
-            ? v
-            : {
-                v: v,
-                m: String(v),
-                ct: { fa: "General", t: typeof v === "number" ? "n" : "s" },
-              };
+        let cellObj: Cell;
+        if (typeof v === "object") {
+          cellObj = { ...v };
+          if (typeof cellObj.v === "string" && cellObj.v.startsWith("=") && !cellObj.f) {
+            cellObj.f = cellObj.v;
+          }
+        } else {
+          const strVal = String(v);
+          const isFormulaCell = strVal.startsWith("=");
+          cellObj = {
+            v: v,
+            m: strVal,
+            ct: { fa: "General", t: typeof v === "number" ? "n" : "s" },
+            ...(isFormulaCell ? { f: strVal } : {}),
+          };
+        }
         matrix[r][c] = cellObj;
         normalizedCelldata.push({ r, c, v: cellObj });
+
+        if (cellObj.f) {
+          calcChain.push({ r, c, id: sheetId });
+        }
       }
     });
 
     return {
       ...sheet,
-      id: sheet.id || `sheet_${Date.now()}_${idx}`,
+      id: sheetId,
       status: sheet.status ?? (idx === 0 ? 1 : 0),
       row: rowCount,
       column: colCount,
       celldata: normalizedCelldata,
+      calcChain: calcChain.length > 0 ? calcChain : (sheet.calcChain as any) || [],
       data: matrix,
     } satisfies Sheet;
   });

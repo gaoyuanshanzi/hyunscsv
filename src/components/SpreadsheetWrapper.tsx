@@ -26,6 +26,7 @@ export const DEFAULT_SHEETS: Sheet[] = [
     id: "sheet_default_1",
     name: "Sheet1",
     celldata: [],
+    calcChain: [],
     row: 2000,
     column: 520,
     status: 1,
