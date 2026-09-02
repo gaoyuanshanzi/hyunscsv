@@ -57,6 +57,59 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
     [onDataChange]
   );
 
+  /** 아래로 채우기 (Excel Fill Down / Ctrl+D) */
+  const fillDown = useCallback(() => {
+    const wb = workbookInstanceRef.current;
+    if (!wb) return;
+
+    try {
+      const selection = wb.getSelection();
+      if (!selection || selection.length === 0) return;
+
+      for (const range of selection) {
+        const r_start = range.row[0];
+        const r_end = range.row[1];
+        const c_start = range.column[0];
+        const c_end = range.column[1];
+
+        if (r_end > r_start) {
+          // 다중 행 선택: 맨 위 행(r_start)의 수식/값/서식을 아래 행들(r_start + 1 ~ r_end)로 채우기
+          wb.autoFillCell(
+            { row: [r_start, r_start], column: [c_start, c_end] },
+            { row: [r_start + 1, r_end], column: [c_start, c_end] },
+            "down"
+          );
+        } else if (r_start > 0) {
+          // 단일 셀 선택: 바로 위 행(r_start - 1)의 수식/값/서식을 현재 셀(r_start)로 채우기
+          wb.autoFillCell(
+            { row: [r_start - 1, r_start - 1], column: [c_start, c_end] },
+            { row: [r_start, r_start], column: [c_start, c_end] },
+            "down"
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("fillDown error:", err);
+    }
+  }, []);
+
+  // Ctrl+D / Cmd+D 단축키 전역 리스너
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D" || e.keyCode === 68)) {
+        // 브라우저 기본 즐겨찾기 창(Ctrl+D) 차단 및 엑셀 아래로 채우기 실행
+        e.preventDefault();
+        e.stopPropagation();
+        fillDown();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [fillDown]);
+
   // 외부 핸들 구성
   if (wrapperRef) {
     wrapperRef.current = {
@@ -245,6 +298,10 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
                   wb.cancelMerge(selection);
                 } catch (__) {}
               }
+              break;
+            }
+            case "fillDown": {
+              fillDown();
               break;
             }
             default:

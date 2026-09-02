@@ -384,6 +384,17 @@ export default function Toolbar({
         <MergeIcon />
       </ToolbarButton>
 
+      {/* Fill Down (Ctrl+D) */}
+      <ToolbarButton
+        id="toolbar-fill-down"
+        label="아래로 채우기 (Ctrl+D)"
+        active={false}
+        onClick={() => onCommand("fillDown")}
+        aria-label="아래로 채우기"
+      >
+        <FillDownIcon />
+      </ToolbarButton>
+
       {/* Formula hint */}
       <div style={{ flex: 1 }} />
       <div
@@ -525,6 +536,15 @@ function MergeIcon() {
       <rect x="1" y="1" width="5" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
       <rect x="8" y="1" width="5" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
       <rect x="1" y="8" width="12" height="5" rx="0.5" stroke="currentColor" strokeWidth="1.2" fill="currentColor" fillOpacity="0.1" />
+    </svg>
+  );
+}
+
+function FillDownIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M7 2v8m0 0l-3-3m3 3l3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="2" y1="12.5" x2="12" y2="12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
