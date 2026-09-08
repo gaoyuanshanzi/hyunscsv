@@ -87,7 +87,12 @@ export default function SpreadsheetWrapper({
 }: Props) {
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
-  const [isFormulaPointing, setIsFormulaPointing] = useState(false);
+  const [pointingRect, setPointingRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // 수식 포인팅(화살표 키/마우스 클릭) 상태 추적
   const formulaPointingRef = useRef<{
@@ -289,18 +294,42 @@ export default function SpreadsheetWrapper({
                 sel.addRange(range);
               }
 
-              // 1. 최소/최대 행열 계산
-              const minR = Math.min(pointing.anchorR, pointing.targetR);
-              const maxR = Math.max(pointing.anchorR, pointing.targetR);
-              const minC = Math.min(pointing.anchorC, pointing.targetC);
-              const maxC = Math.max(pointing.anchorC, pointing.targetC);
+              // 대상 셀의 화면 좌표 계산 (원본 셀은 그대로 실선 하이라이트 유지, 대상 셀 위에 점선 박스 오버레이 표시)
+              const inputBox =
+                document.getElementById("luckysheet-input-box") ||
+                document.querySelector(".luckysheet-input-box");
+              if (inputBox && inputBox instanceof HTMLElement) {
+                const origLeft = parseFloat(inputBox.style.left) || 0;
+                const origTop = parseFloat(inputBox.style.top) || 0;
+                const cellWidth = parseFloat(inputBox.style.width) || 73;
+                const cellHeight = parseFloat(inputBox.style.height) || 20;
 
-              // 2. 대상 셀/범위로 스프레드시트 선택 영역 이동하여 점선 테두리 하이라이트 표시 (화면 점프 방지)
-              try {
-                wb?.setSelection([{ row: [minR, maxR], column: [minC, maxC] }]);
-              } catch (_) {}
+                const deltaR = pointing.targetR - pointing.originR;
+                const deltaC = pointing.targetC - pointing.originC;
 
-              setIsFormulaPointing(true);
+                if (e.shiftKey) {
+                  const anchorDeltaR = pointing.anchorR - pointing.originR;
+                  const anchorDeltaC = pointing.anchorC - pointing.originC;
+                  const minC = Math.min(deltaC, anchorDeltaC);
+                  const minR = Math.min(deltaR, anchorDeltaR);
+                  const countC = Math.abs(deltaC - anchorDeltaC) + 1;
+                  const countR = Math.abs(deltaR - anchorDeltaR) + 1;
+                  setPointingRect({
+                    left: origLeft + minC * cellWidth,
+                    top: origTop + minR * cellHeight,
+                    width: countC * cellWidth,
+                    height: countR * cellHeight,
+                  });
+                } else {
+                  setPointingRect({
+                    left: origLeft + deltaC * cellWidth,
+                    top: origTop + deltaR * cellHeight,
+                    width: cellWidth,
+                    height: cellHeight,
+                  });
+                }
+              }
+
               return;
             }
           } else if (
@@ -311,7 +340,7 @@ export default function SpreadsheetWrapper({
             // 연산자를 타이핑하거나 Enter/Escape를 누르면 현재 포인팅 세션 완료
             formulaPointingRef.current.isPointing = false;
             formulaPointingRef.current.replacedLen = 0;
-            setIsFormulaPointing(false);
+            setPointingRect(null);
           }
         }
       }
@@ -546,7 +575,6 @@ export default function SpreadsheetWrapper({
 
   return (
     <div
-      className={isFormulaPointing ? "is-formula-pointing" : ""}
       style={{
         flex: 1,
         width: "100%",
@@ -567,6 +595,28 @@ export default function SpreadsheetWrapper({
         showToolbar={false}
         allowEdit={true}
       />
+
+      {/* 엑셀 스타일 수식 참조 대상 셀 점선(Marching Ants) 하이라이트 박스 */}
+      {pointingRect && (
+        <div
+          id="formula-pointing-dashed-box"
+          style={{
+            position: "absolute",
+            left: pointingRect.left,
+            top: pointingRect.top,
+            width: pointingRect.width,
+            height: pointingRect.height,
+            border: "2px dashed #2563eb",
+            backgroundColor: "rgba(37, 99, 235, 0.12)",
+            boxShadow:
+              "0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 10px rgba(37, 99, 235, 0.45)",
+            pointerEvents: "none",
+            zIndex: 999,
+            animation: "marchingAnts 0.7s linear infinite",
+            boxSizing: "border-box",
+          }}
+        />
+      )}
     </div>
   );
 }
