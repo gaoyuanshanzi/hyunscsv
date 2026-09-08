@@ -86,6 +86,7 @@ export default function SpreadsheetWrapper({
   reloadToken = 0,
 }: Props) {
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
+  const wrapperDivRef = useRef<HTMLDivElement | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
   const [pointingRect, setPointingRect] = useState<{
     left: number;
@@ -294,40 +295,129 @@ export default function SpreadsheetWrapper({
                 sel.addRange(range);
               }
 
-              // 대상 셀의 화면 좌표 계산 (원본 셀은 그대로 실선 하이라이트 유지, 대상 셀 위에 점선 박스 오버레이 표시)
-              const inputBox =
-                document.getElementById("luckysheet-input-box") ||
-                document.querySelector(".luckysheet-input-box");
-              if (inputBox && inputBox instanceof HTMLElement) {
-                const origLeft = parseFloat(inputBox.style.left) || 0;
-                const origTop = parseFloat(inputBox.style.top) || 0;
-                const cellWidth = parseFloat(inputBox.style.width) || 73;
-                const cellHeight = parseFloat(inputBox.style.height) || 20;
+              // 대상 셀의 화면 좌표 계산 — getColumnWidth/getRowHeight API로 실제 열/행 크기를 구해 정확히 계산
+              try {
+                const wbInst = workbookInstanceRef.current;
+                const inputBox =
+                  document.getElementById("luckysheet-input-box") ||
+                  document.querySelector(".luckysheet-input-box");
 
-                const deltaR = pointing.targetR - pointing.originR;
-                const deltaC = pointing.targetC - pointing.originC;
+                if (wbInst && inputBox && inputBox instanceof HTMLElement) {
+                  // luckysheet-input-box의 left/top은 fortune-cell-area 내부 절대 좌표
+                  const origLeft = parseFloat(inputBox.style.left) || 0;
+                  const origTop = parseFloat(inputBox.style.top) || 0;
 
-                if (e.shiftKey) {
-                  const anchorDeltaR = pointing.anchorR - pointing.originR;
-                  const anchorDeltaC = pointing.anchorC - pointing.originC;
-                  const minC = Math.min(deltaC, anchorDeltaC);
-                  const minR = Math.min(deltaR, anchorDeltaR);
-                  const countC = Math.abs(deltaC - anchorDeltaC) + 1;
-                  const countR = Math.abs(deltaR - anchorDeltaR) + 1;
-                  setPointingRect({
-                    left: origLeft + minC * cellWidth,
-                    top: origTop + minR * cellHeight,
-                    width: countC * cellWidth,
-                    height: countR * cellHeight,
-                  });
-                } else {
-                  setPointingRect({
-                    left: origLeft + deltaC * cellWidth,
-                    top: origTop + deltaR * cellHeight,
-                    width: cellWidth,
-                    height: cellHeight,
-                  });
+                  // fortune-cell-area와 wrapperDiv 사이의 오프셋 계산
+                  // (오버레이는 wrapperDiv 기준 absolute, inputBox 좌표는 fortune-cell-area 기준)
+                  let cellAreaOffsetX = 0;
+                  let cellAreaOffsetY = 0;
+                  const cellArea = document.querySelector(".fortune-cell-area");
+                  if (cellArea && wrapperDivRef.current) {
+                    const cellAreaRect = cellArea.getBoundingClientRect();
+                    const wrapperRect = wrapperDivRef.current.getBoundingClientRect();
+                    cellAreaOffsetX = cellAreaRect.left - wrapperRect.left;
+                    cellAreaOffsetY = cellAreaRect.top - wrapperRect.top;
+                  }
+
+                  const oR = pointing.originR;
+                  const oC = pointing.originC;
+                  const tR = pointing.targetR;
+                  const tC = pointing.targetC;
+
+                  // origin~target 사이 열들의 실제 너비 합산 → targetLeft 계산
+                  let targetLeft = origLeft;
+                  if (tC > oC) {
+                    // 오른쪽으로 이동: origin열 너비부터 (target-1)열까지 더함
+                    const colIndices = Array.from({ length: tC - oC }, (_, i) => oC + i);
+                    const colWidths = wbInst.getColumnWidth(colIndices);
+                    for (const idx of colIndices) {
+                      targetLeft += (colWidths[idx] ?? 73);
+                    }
+                  } else if (tC < oC) {
+                    // 왼쪽으로 이동: target열부터 (origin-1)열까지 너비를 뺌
+                    const colIndices = Array.from({ length: oC - tC }, (_, i) => tC + i);
+                    const colWidths = wbInst.getColumnWidth(colIndices);
+                    for (const idx of colIndices) {
+                      targetLeft -= (colWidths[idx] ?? 73);
+                    }
+                  }
+
+                  // origin~target 사이 행들의 실제 높이 합산 → targetTop 계산
+                  let targetTop = origTop;
+                  if (tR > oR) {
+                    const rowIndices = Array.from({ length: tR - oR }, (_, i) => oR + i);
+                    const rowHeights = wbInst.getRowHeight(rowIndices);
+                    for (const idx of rowIndices) {
+                      targetTop += (rowHeights[idx] ?? 20);
+                    }
+                  } else if (tR < oR) {
+                    const rowIndices = Array.from({ length: oR - tR }, (_, i) => tR + i);
+                    const rowHeights = wbInst.getRowHeight(rowIndices);
+                    for (const idx of rowIndices) {
+                      targetTop -= (rowHeights[idx] ?? 20);
+                    }
+                  }
+
+                  // target 셀 자체의 너비/높이
+                  const tColWidths = wbInst.getColumnWidth([tC]);
+                  const tRowHeights = wbInst.getRowHeight([tR]);
+                  const targetCellW = tColWidths[tC] ?? 73;
+                  const targetCellH = tRowHeights[tR] ?? 20;
+
+                  if (e.shiftKey) {
+                    // shift 선택: anchor~target 범위
+                    const aR = pointing.anchorR;
+                    const aC = pointing.anchorC;
+
+                    // anchor 셀 위치도 같은 방식으로 계산
+                    let anchorLeft = origLeft;
+                    if (aC > oC) {
+                      const idxs = Array.from({ length: aC - oC }, (_, i) => oC + i);
+                      const ws = wbInst.getColumnWidth(idxs);
+                      for (const idx of idxs) anchorLeft += (ws[idx] ?? 73);
+                    } else if (aC < oC) {
+                      const idxs = Array.from({ length: oC - aC }, (_, i) => aC + i);
+                      const ws = wbInst.getColumnWidth(idxs);
+                      for (const idx of idxs) anchorLeft -= (ws[idx] ?? 73);
+                    }
+                    let anchorTop = origTop;
+                    if (aR > oR) {
+                      const idxs = Array.from({ length: aR - oR }, (_, i) => oR + i);
+                      const hs = wbInst.getRowHeight(idxs);
+                      for (const idx of idxs) anchorTop += (hs[idx] ?? 20);
+                    } else if (aR < oR) {
+                      const idxs = Array.from({ length: oR - aR }, (_, i) => aR + i);
+                      const hs = wbInst.getRowHeight(idxs);
+                      for (const idx of idxs) anchorTop -= (hs[idx] ?? 20);
+                    }
+
+                    const aColWidths = wbInst.getColumnWidth([aC]);
+                    const aRowHeights = wbInst.getRowHeight([aR]);
+                    const anchorCellW = aColWidths[aC] ?? 73;
+                    const anchorCellH = aRowHeights[aR] ?? 20;
+
+                    const minLeft = Math.min(targetLeft, anchorLeft);
+                    const minTop = Math.min(targetTop, anchorTop);
+                    const maxRight = Math.max(targetLeft + targetCellW, anchorLeft + anchorCellW);
+                    const maxBottom = Math.max(targetTop + targetCellH, anchorTop + anchorCellH);
+
+                    setPointingRect({
+                      left: minLeft + cellAreaOffsetX,
+                      top: minTop + cellAreaOffsetY,
+                      width: maxRight - minLeft,
+                      height: maxBottom - minTop,
+                    });
+                  } else {
+                    setPointingRect({
+                      left: targetLeft + cellAreaOffsetX,
+                      top: targetTop + cellAreaOffsetY,
+                      width: targetCellW,
+                      height: targetCellH,
+                    });
+                  }
                 }
+              } catch (err) {
+                console.warn("pointingRect calc error:", err);
               }
 
               return;
@@ -575,6 +665,7 @@ export default function SpreadsheetWrapper({
 
   return (
     <div
+      ref={wrapperDivRef}
       style={{
         flex: 1,
         width: "100%",
