@@ -4,6 +4,7 @@ import React, { useRef, useCallback, useEffect, useMemo } from "react";
 import { Workbook, WorkbookInstance } from "@fortune-sheet/react";
 import "@fortune-sheet/react/dist/index.css";
 import type { Sheet } from "@fortune-sheet/core";
+import * as core from "@fortune-sheet/core";
 
 export interface SpreadsheetWrapperHandle {
   getData: () => Sheet[];
@@ -34,18 +35,154 @@ export const DEFAULT_SHEETS: Sheet[] = [
   },
 ];
 
-export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, reloadToken = 0 }: Props) {
+/* ── 셀 주소 변환 유틸리티 ────────────────────────── */
+
+function colToLetter(col: number): string {
+  let temp = "";
+  let c = col + 1;
+  while (c > 0) {
+    const rem = (c - 1) % 26;
+    temp = String.fromCharCode(65 + rem) + temp;
+    c = Math.floor((c - 1) / 26);
+  }
+  return temp;
+}
+
+function cellToAddress(r: number, c: number): string {
+  return `${colToLetter(c)}${r + 1}`;
+}
+
+function rangeToAddress(r1: number, c1: number, r2: number, c2: number): string {
+  if (r1 === r2 && c1 === c2) {
+    return cellToAddress(r1, c1);
+  }
+  const minR = Math.min(r1, r2);
+  const maxR = Math.max(r1, r2);
+  const minC = Math.min(c1, c2);
+  const maxC = Math.max(c1, c2);
+  return `${cellToAddress(minR, minC)}:${cellToAddress(maxR, maxC)}`;
+}
+
+const OPERATOR_CHARS = new Set([
+  "+",
+  "-",
+  "*",
+  "/",
+  "(",
+  ")",
+  ",",
+  "%",
+  "^",
+  "&",
+  ">",
+  "<",
+  "=",
+  ":",
+]);
+
+/* ── FortuneSheet 수식 모드 마우스 클릭 감지 버그 패치 ── */
+
+if (
+  typeof window !== "undefined" &&
+  core &&
+  typeof (core as any).israngeseleciton === "function"
+) {
+  (core as any).israngeseleciton = function (ctx: any, istooltip?: boolean) {
+    if (istooltip == null) istooltip = false;
+
+    const cellEditor = document.getElementById("luckysheet-rich-text-editor");
+    const fxEditor = document.getElementById("luckysheet-functionbox-cell");
+    const activeEditor =
+      document.activeElement?.id === "luckysheet-functionbox-cell"
+        ? fxEditor
+        : cellEditor;
+
+    if (!activeEditor) return false;
+    const txt = (
+      activeEditor.innerText ||
+      activeEditor.textContent ||
+      ""
+    ).trim();
+
+    // 수식은 항상 '=' 로 시작해야 함
+    if (!txt.startsWith("=")) return false;
+
+    // 1. 현재 커서 바로 앞 글자가 연산자(=, +, -, *, /, (, , 등)인지 확인
+    const currSelection = window.getSelection();
+    if (currSelection && currSelection.anchorNode) {
+      const anchor = currSelection.anchorNode;
+      const text = anchor.textContent || "";
+      const offset = currSelection.anchorOffset;
+      if (text.length > 0 && offset > 0) {
+        const charBefore = text.charAt(offset - 1);
+        if (OPERATOR_CHARS.has(charBefore) || charBefore === "=") {
+          ctx.formulaCache.rangeSetValueTo = anchor.parentNode || anchor;
+          return true;
+        }
+      }
+    }
+
+    // 2. 텍스트 마지막 글자가 연산자이거나 '='인 경우
+    const lastChar = txt.slice(-1);
+    if (OPERATOR_CHARS.has(lastChar) || lastChar === "=") {
+      const spans = activeEditor.querySelectorAll("span");
+      if (spans.length > 0) {
+        ctx.formulaCache.rangeSetValueTo = spans[spans.length - 1];
+      } else {
+        ctx.formulaCache.rangeSetValueTo = activeEditor;
+      }
+      return true;
+    }
+
+    // 3. 이미 범위 선택 진행 중인 경우 유지
+    if (ctx.formulaCache?.rangestart) {
+      return true;
+    }
+
+    return false;
+  };
+}
+
+export default function SpreadsheetWrapper({
+  sheets,
+  onDataChange,
+  wrapperRef,
+  reloadToken = 0,
+}: Props) {
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
 
-  // 외부에서 sheets가 주입되었을 때(예: 파일 열기) 동기화
+  // 수식 포인팅(화살표 키) 상태 추적
+  const formulaPointingRef = useRef<{
+    isPointing: boolean;
+    originR: number;
+    originC: number;
+    targetR: number;
+    targetC: number;
+    anchorR: number;
+    anchorC: number;
+    replacedLen: number;
+  }>({
+    isPointing: false,
+    originR: 0,
+    originC: 0,
+    targetR: 0,
+    targetC: 0,
+    anchorR: 0,
+    anchorC: 0,
+    replacedLen: 0,
+  });
+
+  // 외부에서 sheets가 주입되었을 때 동기화
   useEffect(() => {
     internalSheetsRef.current = sheets;
   }, [sheets]);
 
-  // reloadToken이 바뀔 때마다(DB 불러오기, 새 파일) 항상 Workbook을 새로 마운트
+  // reloadToken이 바뀔 때마다 항상 Workbook을 새로 마운트
   const workbookKey = useMemo(() => {
-    return `wb-${reloadToken}-${sheets.map((s) => s.id || s.name).join("-")}-${sheets[0]?.row || 100}`;
+    return `wb-${reloadToken}-${sheets.map((s) => s.id || s.name).join("-")}-${
+      sheets[0]?.row || 100
+    }`;
   }, [sheets, reloadToken]);
 
   // 데이터 변경 핸들러 (onChange)
@@ -93,14 +230,139 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
     }
   }, []);
 
-  // Ctrl+D / Cmd+D 단축키 전역 리스너
+  // 엑셀 수식 포인팅(화살표 키로 셀 주소 자동 삽입) 및 Ctrl+D 전역 키보드 리스너
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D" || e.keyCode === 68)) {
-        // 브라우저 기본 즐겨찾기 창(Ctrl+D) 차단 및 엑셀 아래로 채우기 실행
+      // 1. Ctrl+D / Cmd+D 단축키
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === "d" || e.key === "D" || e.keyCode === 68)
+      ) {
         e.preventDefault();
         e.stopPropagation();
         fillDown();
+        return;
+      }
+
+      // 2. 수식 입력 중 화살표 키(ArrowUp, ArrowDown, ArrowLeft, ArrowRight)로 셀 참조 이동
+      const cellEditor = document.getElementById("luckysheet-rich-text-editor");
+      const fxEditor = document.getElementById("luckysheet-functionbox-cell");
+      const isCellActive =
+        cellEditor &&
+        (document.activeElement === cellEditor ||
+          cellEditor.contains(document.activeElement));
+      const isFxActive =
+        fxEditor &&
+        (document.activeElement === fxEditor ||
+          fxEditor.contains(document.activeElement));
+
+      const activeEditor = isFxActive ? fxEditor : isCellActive ? cellEditor : null;
+
+      if (activeEditor) {
+        const text = (
+          activeEditor.innerText ||
+          activeEditor.textContent ||
+          ""
+        ).trim();
+
+        // 수식 모드인지 확인
+        if (text.startsWith("=")) {
+          const isArrow = [
+            "ArrowUp",
+            "ArrowDown",
+            "ArrowLeft",
+            "ArrowRight",
+          ].includes(e.key);
+
+          if (isArrow) {
+            const pointing = formulaPointingRef.current;
+            const lastChar = text.slice(-1);
+            const canStartPointing =
+              OPERATOR_CHARS.has(lastChar) || lastChar === "=";
+
+            if (pointing.isPointing || canStartPointing) {
+              e.preventDefault();
+              e.stopPropagation();
+
+              const wb = workbookInstanceRef.current;
+              const selection = wb?.getSelection();
+              const currentR = selection?.[0]?.row[0] ?? 0;
+              const currentC = selection?.[0]?.column[0] ?? 0;
+
+              if (!pointing.isPointing) {
+                // 새로운 포인팅 세션 시작
+                pointing.isPointing = true;
+                pointing.originR = currentR;
+                pointing.originC = currentC;
+                pointing.targetR = currentR;
+                pointing.targetC = currentC;
+                pointing.anchorR = currentR;
+                pointing.anchorC = currentC;
+                pointing.replacedLen = 0;
+              }
+
+              // 화살표 방향으로 이동
+              let dr = 0;
+              let dc = 0;
+              if (e.key === "ArrowUp") dr = -1;
+              if (e.key === "ArrowDown") dr = 1;
+              if (e.key === "ArrowLeft") dc = -1;
+              if (e.key === "ArrowRight") dc = 1;
+
+              pointing.targetR = Math.max(0, pointing.targetR + dr);
+              pointing.targetC = Math.max(0, pointing.targetC + dc);
+
+              let newAddress = "";
+              if (e.shiftKey) {
+                newAddress = rangeToAddress(
+                  pointing.anchorR,
+                  pointing.anchorC,
+                  pointing.targetR,
+                  pointing.targetC
+                );
+              } else {
+                pointing.anchorR = pointing.targetR;
+                pointing.anchorC = pointing.targetC;
+                newAddress = cellToAddress(pointing.targetR, pointing.targetC);
+              }
+
+              // 에디터 텍스트에서 이전 포인팅 주소를 새 주소로 치환
+              const baseText = text.slice(
+                0,
+                text.length - pointing.replacedLen
+              );
+              const updatedText = baseText + newAddress;
+              pointing.replacedLen = newAddress.length;
+
+              activeEditor.innerText = updatedText;
+              if (cellEditor && cellEditor !== activeEditor) {
+                cellEditor.innerText = updatedText;
+              }
+              if (fxEditor && fxEditor !== activeEditor) {
+                fxEditor.innerText = updatedText;
+              }
+
+              // 커서를 맨 끝으로 이동
+              const sel = window.getSelection();
+              if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(activeEditor);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+              return;
+            }
+          } else if (
+            OPERATOR_CHARS.has(e.key) ||
+            e.key === "Enter" ||
+            e.key === "Escape"
+          ) {
+            // 연산자를 타이핑하거나 Enter/Escape를 누르면 현재 포인팅 세션 완료
+            formulaPointingRef.current.isPointing = false;
+            formulaPointingRef.current.replacedLen = 0;
+          }
+        }
       }
     };
 
@@ -118,7 +380,11 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
         if (workbookInstanceRef.current) {
           try {
             const liveSheets = workbookInstanceRef.current.getAllSheets();
-            if (liveSheets && Array.isArray(liveSheets) && liveSheets.length > 0) {
+            if (
+              liveSheets &&
+              Array.isArray(liveSheets) &&
+              liveSheets.length > 0
+            ) {
               return liveSheets;
             }
           } catch (err) {
@@ -241,7 +507,10 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
                   newFa = "0.0%";
                 }
               } else if (fa.includes(".")) {
-                newFa = fa.replace(/\.(0+)/, (_: string, zeros: string) => `.${zeros}0`);
+                newFa = fa.replace(
+                  /\.(0+)/,
+                  (_: string, zeros: string) => `.${zeros}0`
+                );
               } else if (fa.includes("#,##0")) {
                 newFa = "#,##0.0";
               } else if (fa === "0") {
@@ -261,18 +530,24 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
               if (fa.includes("%")) {
                 const match = fa.match(/0\.0+(0)%/);
                 if (match) {
-                  newFa = fa.replace(/0(\.0+)%/, (_: string, zeros: string) => {
-                    const remaining = zeros.slice(0, -1);
-                    return remaining === "." ? "0%" : `0${remaining}%`;
-                  });
+                  newFa = fa.replace(
+                    /0(\.0+)%/,
+                    (_: string, zeros: string) => {
+                      const remaining = zeros.slice(0, -1);
+                      return remaining === "." ? "0%" : `0${remaining}%`;
+                    }
+                  );
                 } else {
                   newFa = "0%";
                 }
               } else if (fa.includes(".")) {
-                newFa = fa.replace(/\.(0+)/, (_: string, zeros: string) => {
-                  const remaining = zeros.slice(0, -1);
-                  return remaining.length > 0 ? `.${remaining}` : "";
-                });
+                newFa = fa.replace(
+                  /\.(0+)/,
+                  (_: string, zeros: string) => {
+                    const remaining = zeros.slice(0, -1);
+                    return remaining.length > 0 ? `.${remaining}` : "";
+                  }
+                );
               } else if (fa.includes("#,##0")) {
                 newFa = "#,##0";
               } else {
@@ -283,7 +558,11 @@ export default function SpreadsheetWrapper({ sheets, onDataChange, wrapperRef, r
               break;
             }
             case "formatDate": {
-              wb.setCellFormatByRange("ct", { fa: "yyyy-mm-dd", t: "d" }, range);
+              wb.setCellFormatByRange(
+                "ct",
+                { fa: "yyyy-mm-dd", t: "d" },
+                range
+              );
               break;
             }
             case "formatTime": {
