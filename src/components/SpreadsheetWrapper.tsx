@@ -4,7 +4,6 @@ import React, { useRef, useCallback, useEffect, useMemo } from "react";
 import { Workbook, WorkbookInstance } from "@fortune-sheet/react";
 import "@fortune-sheet/react/dist/index.css";
 import type { Sheet } from "@fortune-sheet/core";
-import * as core from "@fortune-sheet/core";
 
 export interface SpreadsheetWrapperHandle {
   getData: () => Sheet[];
@@ -80,69 +79,6 @@ const OPERATOR_CHARS = new Set([
   ":",
 ]);
 
-/* ── FortuneSheet 수식 모드 마우스 클릭 감지 버그 패치 ── */
-
-if (
-  typeof window !== "undefined" &&
-  core &&
-  typeof (core as any).israngeseleciton === "function"
-) {
-  (core as any).israngeseleciton = function (ctx: any, istooltip?: boolean) {
-    if (istooltip == null) istooltip = false;
-
-    const cellEditor = document.getElementById("luckysheet-rich-text-editor");
-    const fxEditor = document.getElementById("luckysheet-functionbox-cell");
-    const activeEditor =
-      document.activeElement?.id === "luckysheet-functionbox-cell"
-        ? fxEditor
-        : cellEditor;
-
-    if (!activeEditor) return false;
-    const txt = (
-      activeEditor.innerText ||
-      activeEditor.textContent ||
-      ""
-    ).trim();
-
-    // 수식은 항상 '=' 로 시작해야 함
-    if (!txt.startsWith("=")) return false;
-
-    // 1. 현재 커서 바로 앞 글자가 연산자(=, +, -, *, /, (, , 등)인지 확인
-    const currSelection = window.getSelection();
-    if (currSelection && currSelection.anchorNode) {
-      const anchor = currSelection.anchorNode;
-      const text = anchor.textContent || "";
-      const offset = currSelection.anchorOffset;
-      if (text.length > 0 && offset > 0) {
-        const charBefore = text.charAt(offset - 1);
-        if (OPERATOR_CHARS.has(charBefore) || charBefore === "=") {
-          ctx.formulaCache.rangeSetValueTo = anchor.parentNode || anchor;
-          return true;
-        }
-      }
-    }
-
-    // 2. 텍스트 마지막 글자가 연산자이거나 '='인 경우
-    const lastChar = txt.slice(-1);
-    if (OPERATOR_CHARS.has(lastChar) || lastChar === "=") {
-      const spans = activeEditor.querySelectorAll("span");
-      if (spans.length > 0) {
-        ctx.formulaCache.rangeSetValueTo = spans[spans.length - 1];
-      } else {
-        ctx.formulaCache.rangeSetValueTo = activeEditor;
-      }
-      return true;
-    }
-
-    // 3. 이미 범위 선택 진행 중인 경우 유지
-    if (ctx.formulaCache?.rangestart) {
-      return true;
-    }
-
-    return false;
-  };
-}
-
 export default function SpreadsheetWrapper({
   sheets,
   onDataChange,
@@ -152,7 +88,7 @@ export default function SpreadsheetWrapper({
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
 
-  // 수식 포인팅(화살표 키) 상태 추적
+  // 수식 포인팅(화살표 키/마우스 클릭) 상태 추적
   const formulaPointingRef = useRef<{
     isPointing: boolean;
     originR: number;
