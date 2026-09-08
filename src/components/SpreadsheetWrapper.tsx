@@ -295,10 +295,9 @@ export default function SpreadsheetWrapper({
               const minC = Math.min(pointing.anchorC, pointing.targetC);
               const maxC = Math.max(pointing.anchorC, pointing.targetC);
 
-              // 2. 대상 셀/범위로 스프레드시트 선택 영역 이동 및 스크롤하여 점선 테두리 하이라이트 표시
+              // 2. 대상 셀/범위로 스프레드시트 선택 영역 이동하여 점선 테두리 하이라이트 표시 (화면 점프 방지)
               try {
                 wb?.setSelection([{ row: [minR, maxR], column: [minC, maxC] }]);
-                wb?.scroll({ targetRow: pointing.targetR, targetColumn: pointing.targetC });
               } catch (_) {}
 
               setIsFormulaPointing(true);
