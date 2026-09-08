@@ -87,6 +87,7 @@ export default function SpreadsheetWrapper({
 }: Props) {
   const workbookInstanceRef = useRef<WorkbookInstance | null>(null);
   const internalSheetsRef = useRef<Sheet[]>(sheets);
+  const [isFormulaPointing, setIsFormulaPointing] = useState(false);
 
   // 수식 포인팅(화살표 키/마우스 클릭) 상태 추적
   const formulaPointingRef = useRef<{
@@ -287,6 +288,20 @@ export default function SpreadsheetWrapper({
                 sel.removeAllRanges();
                 sel.addRange(range);
               }
+
+              // 1. 최소/최대 행열 계산
+              const minR = Math.min(pointing.anchorR, pointing.targetR);
+              const maxR = Math.max(pointing.anchorR, pointing.targetR);
+              const minC = Math.min(pointing.anchorC, pointing.targetC);
+              const maxC = Math.max(pointing.anchorC, pointing.targetC);
+
+              // 2. 대상 셀/범위로 스프레드시트 선택 영역 이동 및 스크롤하여 점선 테두리 하이라이트 표시
+              try {
+                wb?.setSelection([{ row: [minR, maxR], column: [minC, maxC] }]);
+                wb?.scroll({ targetRow: pointing.targetR, targetColumn: pointing.targetC });
+              } catch (_) {}
+
+              setIsFormulaPointing(true);
               return;
             }
           } else if (
@@ -297,6 +312,7 @@ export default function SpreadsheetWrapper({
             // 연산자를 타이핑하거나 Enter/Escape를 누르면 현재 포인팅 세션 완료
             formulaPointingRef.current.isPointing = false;
             formulaPointingRef.current.replacedLen = 0;
+            setIsFormulaPointing(false);
           }
         }
       }
@@ -531,6 +547,7 @@ export default function SpreadsheetWrapper({
 
   return (
     <div
+      className={isFormulaPointing ? "is-formula-pointing" : ""}
       style={{
         flex: 1,
         width: "100%",
