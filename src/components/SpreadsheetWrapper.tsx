@@ -428,9 +428,33 @@ export default function SpreadsheetWrapper({
             e.key === "Escape"
           ) {
             // 연산자를 타이핑하거나 Enter/Escape를 누르면 현재 포인팅 세션 완료
+            const wasPointing = formulaPointingRef.current.isPointing;
             formulaPointingRef.current.isPointing = false;
             formulaPointingRef.current.replacedLen = 0;
             setPointingRect(null);
+
+            // 포인팅 중이었다면(화살표로 셀 지정 후 연산자 입력),
+            // 브라우저가 문자를 삽입한 뒤 커서를 맨 끝으로 이동시킴
+            if (wasPointing && OPERATOR_CHARS.has(e.key)) {
+              setTimeout(() => {
+                const editor =
+                  document.activeElement === fxEditor ? fxEditor :
+                  document.activeElement === cellEditor ? cellEditor :
+                  cellEditor?.contains(document.activeElement) ? cellEditor :
+                  fxEditor?.contains(document.activeElement) ? fxEditor :
+                  null;
+                if (editor) {
+                  const sel = window.getSelection();
+                  if (sel) {
+                    const r = document.createRange();
+                    r.selectNodeContents(editor);
+                    r.collapse(false);
+                    sel.removeAllRanges();
+                    sel.addRange(r);
+                  }
+                }
+              }, 0);
+            }
           }
         }
       }
